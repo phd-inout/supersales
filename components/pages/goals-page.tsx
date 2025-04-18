@@ -44,6 +44,7 @@ interface Contract {
 
 // 定义详细表单数据结构
 interface GoalFormData {
+  id?: number;
   name: string;
   quarter: string;
   type: string;
@@ -97,11 +98,7 @@ export function GoalsPage() {
       totals[type] = { actual: 0, target: 0 };
     });
     
-    // 调试每个季度的数据
-    console.log("Q1数据:", quartersData.Q1);
-    console.log("Q2数据:", quartersData.Q2);
-    console.log("Q3数据:", quartersData.Q3);
-    console.log("Q4数据:", quartersData.Q4);
+
     
     // 累加四个季度的值
     ["Q1", "Q2", "Q3", "Q4"].forEach(quarter => {
@@ -210,7 +207,26 @@ export function GoalsPage() {
     try {
       // 添加到数据库
       const dbService = await import("@/lib/db-service");
-      await dbService.add("goals", newGoal);
+      
+      // 检查是否已存在相同季度和类型的目标
+      const existingGoals = await dbService.getAll("goals");
+      const existingGoal: { id: number; quarter: string; type: string } | undefined = existingGoals.find(
+        (goal: { quarter: string; type: string }) => goal.quarter === newGoal.quarter && goal.type === newGoal.type
+      );
+      
+      if (existingGoal) {
+        // 更新现有目标
+        await dbService.put("goals", existingGoal.id, {
+          name: newGoal.name,
+          quarter: newGoal.quarter,
+          type: newGoal.type,
+          target: newGoal.target,
+          actual: newGoal.actual
+        });
+      } else {
+        // 添加新目标
+        await dbService.add("goals", newGoal);
+      }
       
       // 立即重新获取数据并更新状态
       await fetchGoalsData();
