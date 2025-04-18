@@ -31,8 +31,6 @@ import { useRouter } from "next/navigation"
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
-
-
 interface SidebarProps {
   activePage: string
   setActivePage: (page: string) => void
@@ -42,6 +40,21 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   // 使用固定的头像种子，避免每次刷新都变化
   const [avatarSeed] = useState("sales" + Math.floor(Math.random() * 1000))
+  // 获取router实例，移到组件顶层
+  const router = useRouter();
+
+  // 创建英文标题映射表
+  const pageTitles: {[key: string]: string} = {
+    "leads": "Sales Leads",
+    "prospects": "Potential Customers",
+    "targets": "Target Clients",
+    "plans": "Project Planning",
+    "goals": "Business Goals",
+    "projects": "Project Management",
+    "reports": "Sales Reports",
+    "database": "Database Management",
+    "customers": "Customer Information"
+  };
 
   const navItems = [
     { id: "leads", label: "商机线索", icon: UserPlus, color: "text-brand-blue" },
@@ -97,28 +110,95 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
         backgroundColor: '#ffffff'
       }).then(canvas => {
         const imgData = canvas.toDataURL('image/png');
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        
+        // 计算适合PPT页面的缩放比例，保留边距
+        const maxWidthRatio = (pptWidth - 100) / imgWidth; // 左右各留50px边距
+        const maxHeightRatio = (pptHeight - 120) / imgHeight; // 上下各留60px边距
+        const ratio = Math.min(maxWidthRatio, maxHeightRatio);
+        const newWidth = imgWidth * ratio;
+        const newHeight = imgHeight * ratio;
+        
+        // 计算居中位置
+        const x = (pptWidth - newWidth) / 2;
+        const y = (pptHeight - newHeight) / 2;
+        
         const pdf = new jsPDF({
           orientation: 'landscape',
           unit: 'px',
           format: [pptWidth, pptHeight]
         });
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pptWidth, pptHeight);
+        // 设置为内置的中文字体
+        pdf.setFont('helvetica');
+
+        // 统一的背景样式
+        pdf.setFillColor(240, 240, 240); // 背景色
+        pdf.rect(0, 0, pptWidth, pptHeight, 'F');
+        
+        // 添加页眉 - 公司Logo或名称区域
+        pdf.setFillColor(220, 220, 220);
+        pdf.rect(0, 0, pptWidth, 40, 'F');
+        
+        // 添加页眉文字
+        pdf.setTextColor(80, 80, 80);
+        pdf.setFontSize(16);
+        pdf.text("Sales Management System", 50, 25);
+        pdf.setFontSize(12);
+        pdf.text(new Date().toISOString().slice(0, 10), pptWidth - 50, 25, { align: 'right' });
+        
+        // 内容区域白色背景和边框
+        pdf.setFillColor(255, 255, 255);
+        pdf.setDrawColor(200, 200, 200);
+        pdf.roundedRect(x-10, y-10, newWidth+20, newHeight+20, 5, 5, 'FD');
+        
+        // 添加内容
+        pdf.addImage(imgData, 'PNG', x, y, newWidth, newHeight);
+        
+        // 添加页面标题 - 使用标准ASCII字符集替代中文
+        const pageName = pageTitles[activePage] || activePage;
+        
+        // 添加页脚
+        pdf.setDrawColor(180, 180, 180);
+        pdf.line(50, pptHeight - 40, pptWidth - 50, pptHeight - 40);
+        
+        // 页脚文字
+        pdf.setTextColor(100, 100, 100);
+        pdf.setFontSize(14);
+        pdf.text(pageName, pptWidth / 2, pptHeight - 25, { align: 'center' });
+        pdf.setFontSize(10);
+        pdf.text("Page 1", pptWidth - 50, pptHeight - 25, { align: 'right' });
+        
         pdf.save(`销售管理系统_${activePage}_${new Date().toISOString().slice(0, 10)}.pdf`);
       }).catch(err => {
         console.error('导出PDF时发生错误:', err);
         alert('导出PDF失败，请查看控制台获取详细错误信息。');
       });
-    } else {
+    } else if (type === 'all') {
       // 导出所有页面 - 重写的版本
-      const router = useRouter();
-      const allPages = [...navItems.map(item => item.id), "customers"];
+      // 过滤掉不需要导出的页面: database和customers
+      let allPages = navItems
+        .filter(item => item.id !== "database")
+        .map(item => item.id);
+        
+      // 将"reports"（数据报告）放在第一位
+      if (allPages.includes("reports")) {
+        // 从当前位置移除
+        allPages = allPages.filter(page => page !== "reports");
+        // 添加到数组开头
+        allPages.unshift("reports");
+      }
+      
       let currentPageIndex = 0;
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'px',
         format: [pptWidth, pptHeight]
       });
+      
+      // 设置为内置的中文字体
+      pdf.setFont('helvetica');
       
       // 创建加载提示
       const loadingDiv = document.createElement('div');
@@ -185,13 +265,56 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
           
           // 添加图像到PDF
           const imgData = canvas.toDataURL('image/png');
-          pdf.addImage(imgData, 'PNG', 0, 0, pptWidth, pptHeight);
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
           
-          // 添加页面标题
-          const pageName = navItems.find(item => item.id === allPages[index])?.label || 
-                          (allPages[index] === "customers" ? "客户信息" : allPages[index]);
+          // 计算适合PPT页面的缩放比例，保留边距
+          const maxWidthRatio = (pptWidth - 100) / imgWidth; // 左右各留50px边距
+          const maxHeightRatio = (pptHeight - 120) / imgHeight; // 上下各留60px边距
+          const ratio = Math.min(maxWidthRatio, maxHeightRatio);
+          const newWidth = imgWidth * ratio;
+          const newHeight = imgHeight * ratio;
+          
+          // 计算居中位置
+          const x = (pptWidth - newWidth) / 2;
+          const y = (pptHeight - newHeight) / 2;
+          
+          // 统一的背景样式
+          pdf.setFillColor(240, 240, 240); // 背景色
+          pdf.rect(0, 0, pptWidth, pptHeight, 'F');
+          
+          // 添加页眉 - 公司Logo或名称区域
+          pdf.setFillColor(220, 220, 220);
+          pdf.rect(0, 0, pptWidth, 40, 'F');
+          
+          // 添加页眉文字
+          pdf.setTextColor(80, 80, 80);
+          pdf.setFontSize(16);
+          pdf.text("Sales Management System", 50, 25);
+          pdf.setFontSize(12);
+          pdf.text(new Date().toISOString().slice(0, 10), pptWidth - 50, 25, { align: 'right' });
+          
+          // 内容区域白色背景和边框
+          pdf.setFillColor(255, 255, 255);
+          pdf.setDrawColor(200, 200, 200);
+          pdf.roundedRect(x-10, y-10, newWidth+20, newHeight+20, 5, 5, 'FD');
+          
+          // 添加到PDF中，保持比例并居中
+          pdf.addImage(imgData, 'PNG', x, y, newWidth, newHeight);
+          
+          // 添加页面标题 - 使用标准ASCII字符集替代中文
+          const pageName = pageTitles[allPages[index]] || allPages[index];
+          
+          // 添加页脚
+          pdf.setDrawColor(180, 180, 180);
+          pdf.line(50, pptHeight - 40, pptWidth - 50, pptHeight - 40);
+          
+          // 页脚文字
+          pdf.setTextColor(100, 100, 100);
+          pdf.setFontSize(14);
+          pdf.text(pageName, pptWidth / 2, pptHeight - 25, { align: 'center' });
           pdf.setFontSize(10);
-          pdf.text(pageName, pptWidth / 2, pptHeight - 10, { align: 'center' });
+          pdf.text(`Page ${index + 1} of ${allPages.length}`, pptWidth - 50, pptHeight - 25, { align: 'right' });
           
           // 处理下一个页面
           processPage(index + 1);
@@ -243,12 +366,12 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
           {navItems.map((item) => (
             <Button
               key={item.id}
-              variant="ghost"
               className={cn(
                 "justify-start rounded-lg transition-all duration-200 relative overflow-hidden",
+                "bg-transparent hover:bg-brand-purple/5",
                 activePage === item.id 
                   ? "bg-brand-purple/10 text-brand-purple font-medium shadow-sm" 
-                  : "text-muted-foreground hover:bg-brand-purple/5 hover:text-brand-purple",
+                  : "text-muted-foreground hover:text-brand-purple",
                 collapsed ? "h-10 px-2" : "h-9 px-3",
               )}
               onClick={() => setActivePage(item.id)}
@@ -270,9 +393,9 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
       </div>
       <div className="p-2 border-t border-gray-200 dark:border-gray-700 flex flex-col gap-1.5 bg-gradient-to-b from-transparent to-brand-purple/5">
         <Button
-          variant="ghost"
           className={cn(
             "w-full justify-start rounded-lg transition-all duration-200 relative overflow-hidden",
+            "bg-transparent hover:bg-brand-purple/5",
             activePage === "customers" 
               ? "bg-brand-purple/10 text-brand-purple font-medium shadow-sm" 
               : "text-muted-foreground hover:bg-brand-purple/5 hover:text-brand-purple",
@@ -299,9 +422,9 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
               className={cn(
                 "w-full justify-start rounded-lg transition-all duration-200",
+                "bg-transparent",
                 "text-muted-foreground hover:bg-brand-purple/5 hover:text-brand-purple !hover:bg-brand-purple/5 !hover:text-brand-purple",
                 collapsed ? "h-10 px-2" : "h-9 px-3",
               )}

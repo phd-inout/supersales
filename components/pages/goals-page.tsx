@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
+import { Button, type ButtonProps } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -21,13 +21,43 @@ import { Plus } from "lucide-react"
 import { motion } from "framer-motion"
 import { getGoalsByQuarters, getGoalStats, getContractsByQuarter } from "@/lib/db-service"
 
+// 定义类型接口
+interface Goal {
+  actual: number;
+  target: number;
+}
+
+interface GoalData {
+  [type: string]: Goal;
+}
+
+interface QuarterData {
+  [quarter: string]: GoalData;
+}
+
+interface Contract {
+  id: number;
+  customer: string;
+  amount: number;
+  date: string;
+}
+
+// 定义详细表单数据结构
+interface GoalFormData {
+  name: string;
+  quarter: string;
+  type: string;
+  target: number;
+  actual: number;
+}
+
 export function GoalsPage() {
   const [activeQuarter, setActiveQuarter] = useState("Q1")
-  const [goalsByQuarters, setGoalsByQuarters] = useState({})
-  const [goalStats, setGoalStats] = useState({})
-  const [contracts, setContracts] = useState([])
+  const [goalsByQuarters, setGoalsByQuarters] = useState<QuarterData>({})
+  const [goalStats, setGoalStats] = useState<GoalData>({})
+  const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
-  const [newGoal, setNewGoal] = useState({
+  const [newGoal, setNewGoal] = useState<GoalFormData>({
     name: "",
     quarter: "Q1",
     type: "leads",
@@ -35,27 +65,111 @@ export function GoalsPage() {
     actual: 0,
   })
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const quarters = await getGoalsByQuarters()
-        const stats = await getGoalStats()
-        const contractsData = await getContractsByQuarter(activeQuarter)
+  // 不同目标类型的颜色配置
+  const goalTypeColors = {
+    leads: "bg-blue-500",
+    visits: "bg-green-500",
+    prospects: "bg-purple-500",
+    contracts: "bg-yellow-500",
+    profit: "bg-red-500",
+    payment: "bg-indigo-500"
+  };
 
-        setGoalsByQuarters(quarters)
-        setGoalStats(stats)
-        setContracts(contractsData)
-      } catch (error) {
-        console.error("Error fetching goals data:", error)
-      } finally {
-        setLoading(false)
+  // 目标类型的中文名称
+  const goalTypeNames = {
+    leads: "线索",
+    visits: "拜访",
+    prospects: "潜在客户",
+    contracts: "合同金额",
+    profit: "利润",
+    payment: "回款"
+  };
+
+  // 计算所有季度的合计值
+  const calculateTotalGoals = (quartersData: QuarterData): GoalData => {
+    const totals: GoalData = {};
+    
+    // 定义需要计算的目标类型
+    const goalTypes = ["leads", "visits", "prospects", "contracts", "profit", "payment"];
+    
+    // 初始化所有类型的合计值
+    goalTypes.forEach(type => {
+      totals[type] = { actual: 0, target: 0 };
+    });
+    
+    // 调试每个季度的数据
+    console.log("Q1数据:", quartersData.Q1);
+    console.log("Q2数据:", quartersData.Q2);
+    console.log("Q3数据:", quartersData.Q3);
+    console.log("Q4数据:", quartersData.Q4);
+    
+    // 累加四个季度的值
+    ["Q1", "Q2", "Q3", "Q4"].forEach(quarter => {
+      if (quartersData[quarter]) {
+        goalTypes.forEach(type => {
+          if (quartersData[quarter][type]) {
+            // 详细记录每个值的累加过程
+            console.log(`累加数据: ${quarter} - ${type}:`, 
+              `当前值=${totals[type].actual}, 待加值=${quartersData[quarter][type].actual}, 类型=${typeof quartersData[quarter][type].actual}`);
+            
+            // 确保值是数字并正确累加
+            const actualToAdd = Number(quartersData[quarter][type].actual || 0);
+            const targetToAdd = Number(quartersData[quarter][type].target || 0);
+            
+            totals[type].actual += actualToAdd;
+            totals[type].target += targetToAdd;
+          }
+        });
       }
+    });
+    
+    console.log("计算后的总计值:", totals);
+    return totals;
+  };
+
+  // 获取最新目标数据
+  const fetchGoalsData = async () => {
+    try {
+      const quarters = await getGoalsByQuarters();
+      
+      // 打印原始数据结构
+      console.log("原始季度数据结构:", JSON.stringify(quarters));
+      
+      // 直接从四个季度数据计算全年目标
+      const totalGoals = calculateTotalGoals(quarters);
+      
+      console.log("计算后的全年目标:", JSON.stringify(totalGoals));
+      
+      setGoalsByQuarters(quarters);
+      setGoalStats(totalGoals);
+      
+      return { quarters, totalGoals };
+    } catch (error) {
+      console.error("获取目标数据失败:", error);
+      return null;
     }
+  };
 
-    fetchData()
-  }, [activeQuarter])
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // 获取目标数据
+        await fetchGoalsData();
+        
+        // 获取合同数据
+        const contractsData = await getContractsByQuarter(activeQuarter);
+        setContracts(contractsData as Contract[]);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [activeQuarter]);
 
-  const getProgressColor = (progress) => {
+  const getProgressColor = (progress: number): string => {
     if (progress >= 100) return "bg-green-500"
     if (progress >= 75) return "bg-green-400"
     if (progress >= 50) return "bg-yellow-400"
@@ -63,13 +177,13 @@ export function GoalsPage() {
     return "bg-red-400"
   }
 
-  const calculateProgress = (actual, target) => {
+  const calculateProgress = (actual: number, target: number): number => {
     if (!target) return 0
     const progress = Math.round((actual / target) * 100)
     return progress > 100 ? 100 : progress
   }
 
-  const formatCurrency = (value) => {
+  const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat("zh-CN", {
       style: "decimal",
       minimumFractionDigits: 0,
@@ -77,33 +191,30 @@ export function GoalsPage() {
     }).format(value)
   }
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setNewGoal((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleNumberInputChange = (e) => {
+  const handleNumberInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     const numValue = Number.parseFloat(value) || 0
     setNewGoal((prev) => ({ ...prev, [name]: numValue }))
   }
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = (name: string, value: string) => {
     setNewGoal((prev) => ({ ...prev, [name]: value }))
   }
 
   const handleAddGoal = async () => {
     try {
       // 添加到数据库
-      const { add } = await import("@/lib/db-service")
-      await add("goals", newGoal)
-
-      // 重新获取数据
-      const quarters = await getGoalsByQuarters()
-      const stats = await getGoalStats()
-      setGoalsByQuarters(quarters)
-      setGoalStats(stats)
-
+      const dbService = await import("@/lib/db-service");
+      await dbService.add("goals", newGoal);
+      
+      // 立即重新获取数据并更新状态
+      await fetchGoalsData();
+      
       // 重置表单
       setNewGoal({
         name: "",
@@ -111,11 +222,11 @@ export function GoalsPage() {
         type: "leads",
         target: 0,
         actual: 0,
-      })
+      });
     } catch (error) {
-      console.error("Error adding goal:", error)
+      console.error("添加目标失败:", error);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -152,18 +263,7 @@ export function GoalsPage() {
                 <DialogTitle className="text-xl">添加新目标</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    目标名称
-                  </Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={newGoal.name}
-                    onChange={handleInputChange}
-                    className="col-span-3 rounded-lg"
-                  />
-                </div>
+               
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="quarter" className="text-right">
                     季度
@@ -227,7 +327,7 @@ export function GoalsPage() {
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" className="rounded-lg">
+                  <Button className="rounded-lg">
                     取消
                   </Button>
                 </DialogClose>
@@ -245,39 +345,54 @@ export function GoalsPage() {
         </div>
       </motion.div>
 
-      {/* 目标总览 - 更紧凑的设计 */}
+      {/* 全年目标总览 - 使用色块区分目标类型 */}
       <motion.div
-        className="flex flex-col mb-3"
+        className="flex flex-col mb-4"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
       >
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-2 border">
-          <div className="flex flex-wrap gap-4 items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">线索:</span>
-              <span className="font-bold text-sm">{goalStats.leads?.actual || 0}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">拜访:</span>
-              <span className="font-bold text-sm">{goalStats.visits?.actual || 0}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">潜在客户:</span>
-              <span className="font-bold text-sm">{goalStats.prospects?.actual || 0}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">合同:</span>
-              <span className="font-bold text-sm">¥{formatCurrency(goalStats.contracts?.actual || 0)}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">利润:</span>
-              <span className="font-bold text-sm">¥{formatCurrency(goalStats.profit?.actual || 0)}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">回款:</span>
-              <span className="font-bold text-sm">¥{formatCurrency(goalStats.payment?.actual || 0)}</span>
-            </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-3 border">
+          <h2 className="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-200">全年目标进度</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {Object.keys(goalTypeNames).map((type) => (
+              <div
+                key={type}
+                className="flex flex-col p-3 rounded-lg shadow-sm border"
+                style={{ borderLeftWidth: '4px', borderLeftColor: `var(--${type}-color, #4f46e5)` }}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-medium text-sm">{goalTypeNames[type as keyof typeof goalTypeNames]}</span>
+                  <span className="text-xs font-bold">
+                    {calculateProgress(
+                      goalStats[type]?.actual || 0,
+                      goalStats[type]?.target || 0
+                    )}%
+                  </span>
+                </div>
+                
+                <div className="flex justify-between text-sm mb-1">
+                  <span>
+                    {type === 'contracts' || type === 'profit' || type === 'payment' 
+                      ? `¥${formatCurrency(goalStats[type]?.actual || 0)}` 
+                      : goalStats[type]?.actual || 0}
+                  </span>
+                  <span className="text-gray-500">
+                    目标: {type === 'contracts' || type === 'profit' || type === 'payment' 
+                      ? `¥${formatCurrency(goalStats[type]?.target || 0)}` 
+                      : goalStats[type]?.target || 0}
+                  </span>
+                </div>
+                
+                <Progress
+                  value={calculateProgress(
+                    goalStats[type]?.actual || 0,
+                    goalStats[type]?.target || 0
+                  )}
+                  className={`h-2 ${goalTypeColors[type as keyof typeof goalTypeColors]}`}
+                />
+              </div>
+            ))}
           </div>
         </div>
       </motion.div>
@@ -474,7 +589,7 @@ export function GoalsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-32 bg-white dark:bg-gray-800 rounded-xl border p-4 col-span-2">
                     <p className="text-gray-500 dark:text-gray-400 mb-2 text-sm">该季度暂无目标数据</p>
-                    <Button size="sm" className="bg-gradient-to-r from-brand-teal to-brand-green">
+                    <Button className="bg-gradient-to-r from-brand-teal to-brand-green">
                       <Plus className="mr-1 h-3 w-3" />
                       添加目标
                     </Button>

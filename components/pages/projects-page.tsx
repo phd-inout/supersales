@@ -24,8 +24,20 @@ import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 
+// 定义项目类型接口
+interface Project {
+  id: string | number;
+  name: string;
+  type: string;
+  description: string;
+  date: Date;
+}
+
+// 定义IDBValidKey类型
+type IDBValidKey = string | number | Date | ArrayBuffer | IDBValidKey[];
+
 export function ProjectsPage() {
-  const [projects, setProjects] = useState([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [newProject, setNewProject] = useState({
@@ -52,7 +64,7 @@ export function ProjectsPage() {
     fetchData()
   }, [])
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value)
   }
 
@@ -63,17 +75,19 @@ export function ProjectsPage() {
       project.type.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setNewProject((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = (name: string, value: string) => {
     setNewProject((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleDateChange = (date) => {
-    setNewProject((prev) => ({ ...prev, date }))
+  const handleDateChange = (date: Date | undefined) => {
+    if (date) {
+      setNewProject((prev) => ({ ...prev, date }))
+    }
   }
 
   const handleAddProject = async () => {
@@ -83,7 +97,8 @@ export function ProjectsPage() {
       const id = await add("projects", newProject)
 
       // 更新状态
-      setProjects([...projects, { id, ...newProject }])
+      const newId = typeof id === 'object' ? String(id) : id;
+      setProjects([...projects, { ...newProject, id: newId }])
 
       // 重置表单
       setNewProject({
@@ -98,12 +113,12 @@ export function ProjectsPage() {
   }
 
   // 添加删除功能
-  const handleDeleteProject = async (id) => {
+  const handleDeleteProject = async (id: string | number) => {
     try {
       if (window.confirm("确定要删除此项目事务吗？此操作不可恢复。")) {
         // 从数据库删除
         const { remove } = await import("@/lib/db-service")
-        await remove("projects", id)
+        await remove("projects", typeof id === 'string' ? parseInt(id) : id)
 
         // 更新状态
         setProjects(projects.filter((project) => project.id !== id))
@@ -124,7 +139,7 @@ export function ProjectsPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold tracking-tight">项目事务</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Daily</h1>
         <div className="flex items-center space-x-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

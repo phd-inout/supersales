@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
+import { Button, type ButtonProps } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -38,14 +38,39 @@ import {
   initSampleData,
 } from "@/lib/db-service"
 
+// 定义类型
+interface Plan {
+  id: number
+  task: string
+  customer: string
+  date: Date | string
+  quarter: string
+  week: number
+  year: number
+  completed: boolean
+}
+
+interface WeekData {
+  year: number
+  week: number
+}
+
+// 扩展ButtonProps接口，添加缺失的属性
+declare module "@/components/ui/button" {
+  interface ButtonProps {
+    variant?: string
+    size?: string
+  }
+}
+
 export function PlansPage() {
-  const [plans, setPlans] = useState([])
+  const [plans, setPlans] = useState<Plan[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedWeek, setSelectedWeek] = useState(getWeekNumber(new Date()))
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [availableWeeks, setAvailableWeeks] = useState([])
+  const [availableWeeks, setAvailableWeeks] = useState<WeekData[]>([])
   const [showWeekSelector, setShowWeekSelector] = useState(false)
   const [newPlan, setNewPlan] = useState({
     task: "",
@@ -58,7 +83,7 @@ export function PlansPage() {
   })
 
   // 获取客户列表
-  const [customers, setCustomers] = useState([])
+  const [customers, setCustomers] = useState<string[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,11 +98,11 @@ export function PlansPage() {
         const targets = await getAll("targets")
 
         // 合并所有客户名称
-        const allCustomers = new Set()
-        customersData.forEach((customer) => allCustomers.add(customer.name))
-        leads.forEach((lead) => allCustomers.add(lead.name))
-        prospects.forEach((prospect) => allCustomers.add(prospect.name))
-        targets.forEach((target) => allCustomers.add(target.name))
+        const allCustomers = new Set<string>()
+        customersData.forEach((customer: any) => allCustomers.add(customer.name))
+        leads.forEach((lead: any) => allCustomers.add(lead.name))
+        prospects.forEach((prospect: any) => allCustomers.add(prospect.name))
+        targets.forEach((target: any) => allCustomers.add(target.name))
 
         setCustomers(Array.from(allCustomers))
 
@@ -97,7 +122,7 @@ export function PlansPage() {
     fetchData()
   }, [])
 
-  const fetchPlansForWeek = async (year, week) => {
+  const fetchPlansForWeek = async (year: number, week: number) => {
     try {
       setLoading(true)
       const plansData = await getByWeek("plans", year, week)
@@ -109,7 +134,7 @@ export function PlansPage() {
     }
   }
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value)
   }
 
@@ -119,16 +144,17 @@ export function PlansPage() {
       plan.customer.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setNewPlan((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = (name: string, value: string) => {
     setNewPlan((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleDateChange = (date) => {
+  const handleDateChange = (date: Date | undefined) => {
+    if (!date) return
     const week = getWeekNumber(date)
     const quarter = date.getMonth() < 3 ? "Q1" : date.getMonth() < 6 ? "Q2" : date.getMonth() < 9 ? "Q3" : "Q4"
 
@@ -170,7 +196,7 @@ export function PlansPage() {
     }
   }
 
-  const handleDeletePlan = async (id) => {
+  const handleDeletePlan = async (id: number) => {
     try {
       if (window.confirm("确定要删除此计划吗？此操作不可恢复。")) {
         // 从数据库删除
@@ -188,7 +214,7 @@ export function PlansPage() {
     }
   }
 
-  const handleToggleComplete = async (plan) => {
+  const handleToggleComplete = async (plan: Plan) => {
     try {
       const updatedPlan = { ...plan, completed: !plan.completed }
       await put("plans", updatedPlan)
@@ -224,7 +250,7 @@ export function PlansPage() {
     await fetchPlansForWeek(nextYear, nextWeek)
   }
 
-  const handleSelectWeek = async (year, week) => {
+  const handleSelectWeek = async (year: number, week: number) => {
     setSelectedYear(year)
     setSelectedWeek(week)
     setShowWeekSelector(false)
@@ -254,7 +280,7 @@ export function PlansPage() {
         transition={{ duration: 0.3 }}
       >
         <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-pink to-brand-purple bg-clip-text text-transparent">
-          计划
+          Plans
         </h1>
         <div className="flex items-center space-x-2">
           <div className="relative">
@@ -322,7 +348,7 @@ export function PlansPage() {
                     <PopoverTrigger asChild>
                       <Button
                         id="date"
-                        variant={"outline"}
+                        variant="outline"
                         className={cn(
                           "col-span-3 justify-start text-left font-normal rounded-lg",
                           !newPlan.date && "text-muted-foreground",
@@ -370,18 +396,18 @@ export function PlansPage() {
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm">周计划</CardTitle>
               <div className="flex items-center space-x-2">
-                <Button variant="outline" size="xs" onClick={handlePreviousWeek} className="h-7 px-2 rounded-lg">
+                <Button variant="outline" size="sm" onClick={handlePreviousWeek} className="h-7 px-2 rounded-lg">
                   <ChevronLeft className="h-3 w-3" />
                 </Button>
                 <Button
                   variant="outline"
-                  size="xs"
+                  size="sm"
                   className="min-w-[180px] h-7 rounded-lg"
                   onClick={() => setShowWeekSelector(!showWeekSelector)}
                 >
                   {formatWeekDisplay(selectedYear, selectedWeek)}
                 </Button>
-                <Button variant="outline" size="xs" onClick={handleNextWeek} className="h-7 px-2 rounded-lg">
+                <Button variant="outline" size="sm" onClick={handleNextWeek} className="h-7 px-2 rounded-lg">
                   <ChevronRight className="h-3 w-3" />
                 </Button>
               </div>
@@ -395,7 +421,7 @@ export function PlansPage() {
                     <Button
                       key={`${year}-${week}`}
                       variant={year === selectedYear && week === selectedWeek ? "default" : "outline"}
-                      size="xs"
+                      size="sm"
                       className="justify-start h-7 text-xs rounded-lg"
                       onClick={() => handleSelectWeek(year, week)}
                     >
@@ -418,7 +444,7 @@ export function PlansPage() {
                   </p>
                 </div>
                 <div>
-                  <Badge variant="outline" className="bg-brand-pink/10 text-brand-pink text-xs">
+                  <Badge className="bg-brand-pink/10 text-brand-pink text-xs">
                     第 {selectedWeek} 周
                   </Badge>
                 </div>
@@ -497,7 +523,7 @@ export function PlansPage() {
                     <p className="text-muted-foreground mb-2 text-sm">该周暂无计划</p>
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button size="xs" className="rounded-lg">
+                        <Button size="sm" className="rounded-lg">
                           <Plus className="mr-1 h-3 w-3" />
                           添加计划
                         </Button>
@@ -547,7 +573,7 @@ export function PlansPage() {
                               <PopoverTrigger asChild>
                                 <Button
                                   id="date"
-                                  variant={"outline"}
+                                  variant="outline"
                                   className={cn(
                                     "col-span-3 justify-start text-left font-normal rounded-lg",
                                     !newPlan.date && "text-muted-foreground",

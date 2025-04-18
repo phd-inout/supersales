@@ -116,7 +116,7 @@ export function ProspectsPage() {
       if (window.confirm("确定要删除此潜在客户吗？此操作不可恢复。")) {
         // 从数据库删除
         const { remove } = await import("@/lib/db-service")
-        await remove("prospects", id)
+        await remove("prospects", typeof id === 'string' ? parseInt(id) : id)
 
         // 更新状态
         setProspects(prospects.filter((prospect) => prospect.id !== id))
@@ -171,14 +171,14 @@ export function ProspectsPage() {
         transition={{ duration: 0.3 }}
       >
         <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-indigo to-brand-purple bg-clip-text text-transparent">
-          潜在客户
+          Prospects
         </h1>
         <div className="flex items-center space-x-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="搜索潜在客户..."
+              placeholder="Search prospects..."
               className="pl-8 w-[250px] rounded-lg border-gray-200 focus:border-primary"
               value={searchTerm}
               onChange={handleSearch}

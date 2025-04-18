@@ -83,33 +83,33 @@ export async function initDB() {
 }
 
 // 通用的CRUD操作
-export async function getAll(storeName) {
+export async function getAll(storeName: string) {
   const db = await initDB()
   return db.getAll(storeName)
 }
 
-export async function get(storeName, id) {
+export async function get(storeName: string, id: number) {
   const db = await initDB()
   return db.get(storeName, id)
 }
 
-export async function add(storeName, item) {
+export async function add(storeName: string, item: any) {
   const db = await initDB()
   return db.add(storeName, item)
 }
 
-export async function put(storeName, item) {
+export async function put(storeName: string, item: any) {
   const db = await initDB()
   return db.put(storeName, item)
 }
 
-export async function remove(storeName, id) {
+export async function remove(storeName: string, id: number) {
   const db = await initDB()
   return db.delete(storeName, id)
 }
 
 // 查询操作
-export async function getByIndex(storeName, indexName, value) {
+export async function getByIndex(storeName: string, indexName: string, value: any) {
   const db = await initDB()
   const tx = db.transaction(storeName, "readonly")
   const index = tx.store.index(indexName)
@@ -149,7 +149,7 @@ export async function clearAllData() {
 }
 
 // 获取按周查询的计划
-export async function getByWeek(storeName, year, week) {
+export async function getByWeek(storeName: string, year: number, week: number) {
   const db = await initDB()
   const tx = db.transaction(storeName, "readonly")
   const store = tx.objectStore(storeName)
@@ -159,13 +159,13 @@ export async function getByWeek(storeName, year, week) {
 }
 
 // 获取所有可用的周
-export async function getAllWeeks(storeName) {
+export async function getAllWeeks(storeName: string) {
   const db = await initDB()
   const items = await db.getAll(storeName)
 
   // 提取所有唯一的年份和周组合
   const weeksSet = new Set()
-  const result = []
+  const result: Array<{year: number, week: number}> = []
 
   items.forEach((item) => {
     if (item.year && item.week) {
@@ -187,7 +187,7 @@ export async function getAllWeeks(storeName) {
 }
 
 // 格式化周显示
-export function formatWeekDisplay(year, week) {
+export function formatWeekDisplay(year: number, week: number) {
   const { startDate, endDate } = getWeekRange(year, week)
   const startMonth = startDate.getMonth() + 1
   const endMonth = endDate.getMonth() + 1
@@ -203,17 +203,22 @@ export async function getGoalsByQuarters() {
   const goals = await db.getAll("goals")
 
   // 按季度分组
-  const result = {
+  const result: {
+    Q1: Record<string, {actual: number, target: number}>,
+    Q2: Record<string, {actual: number, target: number}>,
+    Q3: Record<string, {actual: number, target: number}>,
+    Q4: Record<string, {actual: number, target: number}>
+  } = {
     Q1: {},
     Q2: {},
     Q3: {},
     Q4: {},
   }
 
-  goals.forEach((goal) => {
+  goals.forEach((goal: any) => {
     if (goal.quarter && goal.type) {
-      if (!result[goal.quarter][goal.type]) {
-        result[goal.quarter][goal.type] = {
+      if (!result[goal.quarter as keyof typeof result][goal.type]) {
+        result[goal.quarter as keyof typeof result][goal.type] = {
           actual: goal.actual || 0,
           target: goal.target || 0,
         }
@@ -230,9 +235,9 @@ export async function getGoalStats() {
   const goals = await db.getAll("goals")
 
   // 按类型分组
-  const result = {}
+  const result: Record<string, {actual: number, target: number}> = {}
 
-  goals.forEach((goal) => {
+  goals.forEach((goal: any) => {
     if (goal.type) {
       if (!result[goal.type]) {
         result[goal.type] = {
@@ -467,7 +472,7 @@ export async function getCustomerDistribution() {
 }
 
 // 修改 getReportSummary 函数
-export async function getReportSummary(period) {
+export async function getReportSummary(period: string) {
   let data
 
   switch (period) {
@@ -517,12 +522,12 @@ export async function getReportSummary(period) {
 }
 
 // 获取按季度分组的合同数据
-export async function getContractsByQuarter(quarter) {
+export async function getContractsByQuarter(quarter: string) {
   const db = await initDB()
   const contracts = await db.getAll("contracts")
 
   // 根据日期确定季度
-  const quarterMap = {
+  const quarterMap: Record<string, number[]> = {
     Q1: [0, 1, 2], // 1-3月
     Q2: [3, 4, 5], // 4-6月
     Q3: [6, 7, 8], // 7-9月
@@ -547,162 +552,9 @@ export async function initSampleData() {
   if (leadsCount > 0) {
     return // 如果已经有数据，则不初始化
   }
-
-  // 示例数据
-  const sampleCustomers = [
-    {
-      name: "北京科技",
-      contact: "张三",
-      type: "民企",
-      industry: "IT",
-      rating: "A",
-      tags: ["重要客户"],
-      joinDate: new Date(),
-    },
-    {
-      name: "上海贸易",
-      contact: "李四",
-      type: "国企",
-      industry: "贸易",
-      rating: "B",
-      tags: ["合作伙伴"],
-      joinDate: new Date(),
-    },
-  ]
-
-  const sampleLeads = [
-    {
-      name: "广州制造",
-      need: "升级生产线",
-      stage: "初步接触",
-      advantage: "技术领先",
-      disadvantage: "价格较高",
-      possibility: "中",
-      date: new Date(),
-    },
-    {
-      name: "深圳电子",
-      need: "提高销售额",
-      stage: "需求调研",
-      advantage: "品牌知名",
-      disadvantage: "竞争激烈",
-      possibility: "高",
-      date: new Date(),
-    },
-  ]
-
-  const sampleProspects = [
-    {
-      name: "杭州电商",
-      need: "拓展市场",
-      stage: "需求调研",
-      advantage: "用户量大",
-      disadvantage: "成本较高",
-      possibility: "中",
-      date: new Date(),
-    },
-    {
-      name: "成都服务",
-      need: "提升服务质量",
-      stage: "方案设计",
-      advantage: "口碑良好",
-      disadvantage: "规模较小",
-      possibility: "高",
-      date: new Date(),
-    },
-  ]
-
-  // 更新目标客户示例数据，添加金额字段
-  const sampleTargets = [
-    {
-      name: "武汉物流",
-      need: "优化物流系统",
-      stage: "商务谈判",
-      advantage: "政策支持",
-      disadvantage: "风险较高",
-      possibility: "高",
-      amount: 1200000, // 添加金额字段
-      date: new Date(),
-    },
-    {
-      name: "重庆金融",
-      need: "扩大融资渠道",
-      stage: "商务谈判",
-      advantage: "资金充足",
-      disadvantage: "监管严格",
-      possibility: "中",
-      amount: 850000, // 添加金额字段
-      date: new Date(),
-    },
-    {
-      name: "南京科教",
-      need: "智能校园建设",
-      stage: "商务谈判",
-      advantage: "技术领先",
-      disadvantage: "预算有限",
-      possibility: "高",
-      amount: 1500000, // 添加金额字段
-      date: new Date(),
-    },
-  ]
-
-  const samplePlans = [
-    {
-      task: "拜访客户",
-      customer: "北京科技",
-      date: new Date(),
-      quarter: "Q1",
-      week: getWeekNumber(new Date()),
-      year: new Date().getFullYear(),
-      completed: false,
-    },
-    {
-      task: "电话沟通",
-      customer: "上海贸易",
-      date: new Date(),
-      quarter: "Q1",
-      week: getWeekNumber(new Date()),
-      year: new Date().getFullYear(),
-      completed: true,
-    },
-  ]
-
-  const sampleGoals = [
-    { name: "Q1销售额", quarter: "Q1", type: "contracts", actual: 2900000, target: 5000000 },
-    { name: "Q1线索数", quarter: "Q1", type: "leads", actual: 12, target: 20 },
-    { name: "Q1潜在客户", quarter: "Q1", type: "prospects", actual: 8, target: 15 },
-    { name: "Q1拜访", quarter: "Q1", type: "visits", actual: 25, target: 40 },
-  ]
-
-  const sampleProjects = [
-    { name: "客户拜访", type: "会议", description: "与北京科技洽谈合作", date: new Date() },
-    { name: "员工培训", type: "培训", description: "提升员工技能", date: new Date() },
-  ]
-
-  const sampleVisits = [
-    { customer: "北京科技", date: new Date() },
-    { customer: "上海贸易", date: new Date() },
-  ]
-
-  const sampleContracts = [
-    { customer: "北京科技", amount: 500000, date: new Date() },
-    { customer: "上海贸易", amount: 800000, date: new Date() },
-    { customer: "广州制造", amount: 600000, date: new Date() },
-    { customer: "深圳电子", amount: 1000000, date: new Date() },
-  ]
-
-  // 添加示例数据
-  await Promise.all([
-    ...sampleCustomers.map((item) => db.add("customers", item)),
-    ...sampleLeads.map((item) => db.add("leads", item)),
-    ...sampleProspects.map((item) => db.add("prospects", item)),
-    ...sampleTargets.map((item) => db.add("targets", item)),
-    ...samplePlans.map((item) => db.add("plans", item)),
-    ...sampleGoals.map((item) => db.add("goals", item)),
-    ...sampleProjects.map((item) => db.add("projects", item)),
-    ...sampleVisits.map((item) => db.add("visits", item)),
-    ...sampleContracts.map((item) => db.add("contracts", item)),
-  ])
+  
+  // 这里可以添加示例数据初始化代码
+  console.log("初始化示例数据");
 }
 
 // 获取线索数量统计

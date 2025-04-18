@@ -175,7 +175,7 @@ export function TargetCustomersPage() {
         transition={{ duration: 0.3 }}
       >
         <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-purple to-brand-pink bg-clip-text text-transparent">
-          目标客户
+          Target Customers
         </h1>
         <div className="flex items-center space-x-2">
           <div className="relative">

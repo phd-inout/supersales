@@ -249,8 +249,8 @@ export function ReportsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            活动概述
-          </motion.h1>
+            Sales Report
+                      </motion.h1>
           <PerformanceWeightsDialog weights={weights} onWeightsChange={setWeights} />
         </div>
         <motion.div
