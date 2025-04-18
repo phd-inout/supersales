@@ -22,10 +22,24 @@ import { Plus, Search, Trash2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
+interface Target {
+  id?: string | number;
+  name: string;
+  need: string;
+  stage: string;
+  advantage: string;
+  disadvantage: string;
+  possibility: string;
+  amount: number;
+  date: Date;
+}
+
 export function TargetCustomersPage() {
-  const [targets, setTargets] = useState([])
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [filteredTargets, setFilteredTargets] = useState<Target[]>([]);
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
   const [newTarget, setNewTarget] = useState({
     name: "",
     need: "",
@@ -44,6 +58,7 @@ export function TargetCustomersPage() {
         const { getAll } = await import("@/lib/db-service")
         const targetsData = await getAll("targets")
         setTargets(targetsData)
+        filterTargetsByPeriod(targetsData, period)
       } catch (error) {
         console.error("Error fetching targets data:", error)
       } finally {
@@ -54,28 +69,60 @@ export function TargetCustomersPage() {
     fetchData()
   }, [])
 
-  const handleSearch = (e) => {
+  useEffect(() => {
+    filterTargetsByPeriod(targets, period)
+  }, [period, targets])
+
+  const filterTargetsByPeriod = (data: Target[], period: string) => {
+    const now = new Date()
+    const filtered = data.filter(target => {
+      const targetDate = new Date(target.date)
+      switch (period) {
+        case "weekly":
+          return getWeekNumber(targetDate) === getWeekNumber(now) && 
+                 targetDate.getFullYear() === now.getFullYear()
+        case "monthly":
+          return targetDate.getMonth() === now.getMonth() && 
+                 targetDate.getFullYear() === now.getFullYear()
+        case "quarterly":
+          return getQuarter(targetDate) === getQuarter(now) && 
+                 targetDate.getFullYear() === now.getFullYear()
+        case "yearly":
+          return targetDate.getFullYear() === now.getFullYear()
+        default:
+          return true
+      }
+    })
+    setFilteredTargets(filtered)
+  }
+
+  // 辅助函数
+  const getWeekNumber = (date: Date) => {
+    const firstDay = new Date(date.getFullYear(), 0, 1)
+    const pastDays = (date.getTime() - firstDay.getTime()) / 86400000
+    return Math.ceil((pastDays + firstDay.getDay() + 1) / 7)
+  }
+
+  const getQuarter = (date: Date) => {
+    return Math.floor(date.getMonth() / 3) + 1
+  }
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value)
   }
 
-  const filteredTargets = targets.filter(
-    (target) =>
-      target.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      target.need.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
-
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setNewTarget((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleNumberInputChange = (e) => {
+  const handleNumberInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     const numValue = Number.parseFloat(value) || 0
     setNewTarget((prev) => ({ ...prev, [name]: numValue }))
   }
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = (name: string, value: string) => {
     setNewTarget((prev) => ({ ...prev, [name]: value }))
   }
 
@@ -86,7 +133,7 @@ export function TargetCustomersPage() {
       const id = await add("targets", newTarget)
 
       // 更新状态
-      setTargets([...targets, { id, ...newTarget }])
+      setTargets([...targets, { ...newTarget, id: id as string | number }])
 
       // 重置表单
       setNewTarget({
@@ -105,12 +152,13 @@ export function TargetCustomersPage() {
   }
 
   // 添加删除功能
-  const handleDeleteTarget = async (id) => {
+  const handleDeleteTarget = async (id: string | number) => {
     try {
       if (window.confirm("确定要删除此目标客户吗？此操作不可恢复。")) {
         // 从数据库删除
         const { remove } = await import("@/lib/db-service")
-        await remove("targets", id)
+        // 确保 id 为数字类型
+        await remove("targets", typeof id === 'string' ? parseInt(id) : id)
 
         // 更新状态
         setTargets(targets.filter((target) => target.id !== id))
@@ -120,7 +168,7 @@ export function TargetCustomersPage() {
     }
   }
 
-  const getStageColor = (stage) => {
+  const getStageColor = (stage: string) => {
     switch (stage) {
       case "初步接触":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
@@ -135,7 +183,7 @@ export function TargetCustomersPage() {
     }
   }
 
-  const getPossibilityColor = (possibility) => {
+  const getPossibilityColor = (possibility: string) => {
     switch (possibility) {
       case "高":
         return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
@@ -149,7 +197,7 @@ export function TargetCustomersPage() {
   }
 
   // 格式化金额
-  const formatAmount = (amount) => {
+  const formatAmount = (amount: number) => {
     return new Intl.NumberFormat("zh-CN", {
       style: "currency",
       currency: "CNY",
@@ -188,6 +236,17 @@ export function TargetCustomersPage() {
               onChange={handleSearch}
             />
           </div>
+          <Select value={period} onValueChange={(value) => setPeriod(value as any)}>
+            <SelectTrigger className="w-[120px] rounded-lg">
+              <SelectValue placeholder="显示周期" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekly">本周</SelectItem>
+              <SelectItem value="monthly">本月</SelectItem>
+              <SelectItem value="quarterly">本季度</SelectItem>
+              <SelectItem value="yearly">本年</SelectItem>
+            </SelectContent>
+          </Select>
           <Dialog>
             <DialogTrigger asChild>
               <Button className="rounded-lg bg-gradient-to-r from-brand-purple to-brand-pink hover:from-brand-purple/90 hover:to-brand-pink/90 transition-all duration-300">
@@ -339,7 +398,10 @@ export function TargetCustomersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTargets.map((target, index) => (
+            {filteredTargets.filter(target => 
+              target.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              target.need.toLowerCase().includes(searchTerm.toLowerCase())
+            ).map((target, index) => (
               <TableRow
                 key={target.id}
                 className={cn(
@@ -352,14 +414,14 @@ export function TargetCustomersPage() {
                 <TableCell className="font-medium">{target.name}</TableCell>
                 <TableCell className="max-w-[200px] truncate">{target.need}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={getStageColor(target.stage)}>
+                  <Badge className={getStageColor(target.stage)}>
                     {target.stage}
                   </Badge>
                 </TableCell>
                 <TableCell>{target.advantage}</TableCell>
                 <TableCell>{target.disadvantage}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={getPossibilityColor(target.possibility)}>
+                  <Badge className={getPossibilityColor(target.possibility)}>
                     {target.possibility}
                   </Badge>
                 </TableCell>
@@ -368,7 +430,7 @@ export function TargetCustomersPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDeleteTarget(target.id)}
+                    onClick={() => target.id && handleDeleteTarget(target.id)}
                     className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <Trash2 className="h-4 w-4" />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,11 +29,24 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { getAll, add, remove, initSampleData } from "@/lib/db-service"
 
+interface Lead {
+  id?: string | number;
+  name: string;
+  need: string;
+  stage: string;
+  advantage: string;
+  disadvantage: string;
+  possibility: string;
+  date: Date;
+  quarter: string;
+}
+
 export function LeadsPage() {
-  const [leads, setLeads] = useState([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [newLead, setNewLead] = useState({
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
+  const [newLead, setNewLead] = useState<Omit<Lead, 'id'>>({
     name: "",
     need: "",
     stage: "初步接触",
@@ -42,28 +55,31 @@ export function LeadsPage() {
     possibility: "中",
     date: new Date(),
     quarter: getQuarter(new Date()),
-  })
+  });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 初始化示例数据
-        await initSampleData()
-
-        // 获取线索数据
-        const leadsData = await getAll("leads")
-        setLeads(leadsData)
+        setLoading(true);
+        await initSampleData();
+        const leadsData = await getAll("leads");
+        setLeads(leadsData);
       } catch (error) {
-        console.error("Error fetching leads data:", error)
+        console.error("Error fetching leads data:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
+    fetchData();
+  }, []);
 
-    fetchData()
-  }, [])
+  const getWeekNumber = (date: Date) => {
+    const firstDay = new Date(date.getFullYear(), 0, 1)
+    const pastDays = (date.getTime() - firstDay.getTime()) / 86400000
+    return Math.ceil((pastDays + firstDay.getDay() + 1) / 7)
+  }
 
-  function getQuarter(date) {
+  function getQuarter(date: Date) {
     const month = date.getMonth()
     if (month < 3) return "Q1"
     if (month < 6) return "Q2"
@@ -71,63 +87,60 @@ export function LeadsPage() {
     return "Q4"
   }
 
-  const handleSearch = (e) => {
-    setSearchTerm(e.target.value)
+  const filteredLeads = useMemo(() => {
+
+    const now = new Date();
+    return leads.filter(lead => {
+      const leadDate = new Date(lead.date);
+      if (!leadDate) return false;
+      
+      const matchesSearch = 
+        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.need.toLowerCase().includes(searchTerm.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      switch (period) {
+        case "weekly":
+          return getWeekNumber(leadDate) === getWeekNumber(now) && 
+                 leadDate.getFullYear() === now.getFullYear();
+        case "monthly":
+          return leadDate.getMonth() === now.getMonth() && 
+                 leadDate.getFullYear() === now.getFullYear();
+        case "quarterly":
+          return getQuarter(leadDate) === getQuarter(now) && 
+                 leadDate.getFullYear() === now.getFullYear();
+        case "yearly":
+          return leadDate.getFullYear() === now.getFullYear();
+        default:
+          return true;
+      }
+    });
+  }, [leads, period, searchTerm]);
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   }
 
-  const filteredLeads = leads.filter(
-    (lead) =>
-      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.need.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setNewLead((prev) => ({ ...prev, [name]: value }))
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewLead((prev) => ({ ...prev, [name]: value }));
   }
 
-  const handleSelectChange = (name, value) => {
-    setNewLead((prev) => ({ ...prev, [name]: value }))
+  const handleSelectChange = (name: keyof Lead, value: string) => {
+    setNewLead((prev) => ({ ...prev, [name]: value }));
   }
 
-  const handleAddLead = async () => {
+  const handleDeleteLead = async (id: string | number) => {
     try {
-      // 添加到数据库
-      await add("leads", newLead)
-
-      // 重新获取数据
-      const leadsData = await getAll("leads")
-      setLeads(leadsData)
-
-      // 重置表单
-      setNewLead({
-        name: "",
-        need: "",
-        stage: "初步接触",
-        advantage: "",
-        disadvantage: "",
-        possibility: "中",
-        date: new Date(),
-        quarter: getQuarter(new Date()),
-      })
+      await remove("leads", typeof id === 'string' ? parseInt(id) : id);
+      setLeads(leads.filter((lead) => lead.id !== id));
     } catch (error) {
-      console.error("Error adding lead:", error)
+      console.error("Error deleting lead:", error);
     }
   }
 
-  const handleDeleteLead = async (id) => {
-    try {
-      // 从数据库删除
-      await remove("leads", id)
-
-      // 更新状态
-      setLeads(leads.filter((lead) => lead.id !== id))
-    } catch (error) {
-      console.error("Error deleting lead:", error)
-    }
-  }
-
-  const getPossibilityColor = (possibility) => {
+  const getPossibilityColor = (possibility: "高" | "中" | "低"): string => {
     switch (possibility) {
       case "高":
         return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
@@ -140,7 +153,7 @@ export function LeadsPage() {
     }
   }
 
-  const getStageColor = (stage) => {
+  const getStageColor = (stage: string) => {
     switch (stage) {
       case "初步接触":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
@@ -163,6 +176,27 @@ export function LeadsPage() {
     )
   }
 
+  const handleAddLead = async () => {
+      try {
+        const addedLead = await add("leads", newLead);
+        setLeads(prev => [...prev, { ...newLead, id: addedLead as number }]);
+        
+        // 重置表单
+        setNewLead({
+          name: "",
+          need: "",
+          stage: "初步接触",
+          advantage: "",
+          disadvantage: "",
+          possibility: "中",
+          date: new Date(),
+          quarter: getQuarter(new Date()),
+        });
+      } catch (error) {
+        console.error("Error adding lead:", error);
+      }
+    };
+
   return (
     <div className="p-6 space-y-6">
       <motion.div
@@ -171,8 +205,8 @@ export function LeadsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-brand-blue to-brand-indigo bg-clip-text text-transparent">
-          商机线索
+        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-purple to-brand-pink bg-clip-text text-transparent">
+          Sales Leads
         </h1>
         <div className="flex items-center space-x-2">
           <div className="relative">
@@ -185,6 +219,17 @@ export function LeadsPage() {
               onChange={handleSearch}
             />
           </div>
+          <Select value={period} onValueChange={(value) => setPeriod(value as any)}>
+            <SelectTrigger className="w-[120px] rounded-lg">
+              <SelectValue placeholder="显示周期" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekly">本周</SelectItem>
+              <SelectItem value="monthly">本月</SelectItem>
+              <SelectItem value="quarterly">本季度</SelectItem>
+              <SelectItem value="yearly">本年</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="icon" className="rounded-lg">
             <Filter className="h-4 w-4" />
           </Button>
@@ -328,43 +373,43 @@ export function LeadsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredLeads.map((lead) => (
-              <TableRow key={lead.id} className="hover:bg-muted/20">
-                <TableCell className="font-medium">{lead.id}</TableCell>
-                <TableCell className="font-medium">{lead.name}</TableCell>
-                <TableCell className="max-w-[200px] truncate">{lead.need}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={`${getStageColor(lead.stage)}`}>
-                    {lead.stage}
-                  </Badge>
-                </TableCell>
-                <TableCell>{lead.advantage}</TableCell>
-                <TableCell>{lead.disadvantage}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={`${getPossibilityColor(lead.possibility)}`}>
-                    {lead.possibility}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>操作</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem>编辑</DropdownMenuItem>
-                      <DropdownMenuItem>详情</DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteLead(lead.id)}>
-                        删除
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            {filteredLeads.length > 0 ? (
+              filteredLeads.map((lead: Lead, index: number) => (
+                <TableRow key={lead.id}>
+                  <TableCell>{index + 1}</TableCell>
+                  <TableCell>{lead.name}</TableCell>
+                  <TableCell>{lead.need}</TableCell>
+                  <TableCell>
+                    <Badge className={getStageColor(lead.stage)}>{lead.stage}</Badge>
+                  </TableCell>
+                  <TableCell>{lead.advantage}</TableCell>
+                  <TableCell>{lead.disadvantage}</TableCell>
+                  <TableCell>
+                    <Badge className={getPossibilityColor(lead.possibility as "高" | "中" | "低")}>
+                      {lead.possibility}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleDeleteLead(lead.id!)}>删除</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-4">
+                  暂无数据
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </motion.div>

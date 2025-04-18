@@ -248,7 +248,7 @@ export function GoalsPage() {
         transition={{ duration: 0.3 }}
       >
         <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-teal to-brand-green bg-clip-text text-transparent">
-          目标
+          Goals
         </h1>
         <div className="flex items-center space-x-2">
           <Dialog>

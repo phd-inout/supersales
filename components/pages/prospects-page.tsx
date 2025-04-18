@@ -170,8 +170,8 @@ export function ProspectsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-indigo to-brand-purple bg-clip-text text-transparent">
-          Prospects
+        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-purple to-brand-pink bg-clip-text text-transparent">
+          Potential Customers
         </h1>
         <div className="flex items-center space-x-2">
           <div className="relative">
