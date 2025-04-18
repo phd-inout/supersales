@@ -216,7 +216,8 @@ export function GoalsPage() {
       
       if (existingGoal) {
         // 更新现有目标
-        await dbService.put("goals", existingGoal.id, {
+        await dbService.put("goals", {
+    id: existingGoal.id,
           name: newGoal.name,
           quarter: newGoal.quarter,
           type: newGoal.type,
