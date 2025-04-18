@@ -342,15 +342,44 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
       <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-brand-purple/5 to-brand-pink/5">
         {!collapsed && (
           <div className="flex items-center space-x-2">
-            <Avatar className="h-9 w-9 ring-2 ring-brand-purple/20 shadow-sm">
-              <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${avatarSeed}`} alt="用户头像" />
-              <AvatarFallback className="bg-gradient-to-br from-brand-purple to-brand-pink text-white text-xs">
-                用户
-              </AvatarFallback>
-            </Avatar>
+            <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-gradient-to-br from-brand-purple to-brand-pink">
+              <svg 
+                width="24" 
+                height="24" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                xmlns="http://www.w3.org/2000/svg"
+                className="text-white"
+              >
+                <path 
+                  d="M12 2L3 7L12 12L21 7L12 2Z" 
+                  fill="currentColor"
+                  stroke="currentColor" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                />
+                <path 
+                  d="M3 12L12 17L21 12" 
+                  fill="none"
+                  stroke="currentColor" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                />
+                <path 
+                  d="M3 17L12 22L21 17" 
+                  fill="none"
+                  stroke="currentColor" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
             <div>
-              <p className="text-sm font-semibold text-brand-purple">个人信息</p>
-              <p className="text-xs text-muted-foreground">销售管理系统</p>
+              <p className="text-sm font-semibold text-brand-purple">销售管理系统</p>
+              <p className="text-xs text-muted-foreground">SuperSales</p>
             </div>
           </div>
         )}
