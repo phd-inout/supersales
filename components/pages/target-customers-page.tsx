@@ -154,7 +154,7 @@ export function TargetCustomersPage() {
   // 添加删除功能
   const handleDeleteTarget = async (id: string | number) => {
     try {
-      if (window.confirm("确定要删除此目标客户吗？此操作不可恢复。")) {
+      if (window.confirm("确定要删除此客户吗？此操作不可恢复。")) {
         // 从数据库删除
         const { remove } = await import("@/lib/db-service")
         // 确保 id 为数字类型
@@ -223,15 +223,15 @@ export function TargetCustomersPage() {
         transition={{ duration: 0.3 }}
       >
         <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-purple to-brand-pink bg-clip-text text-transparent">
-          Target Customers
+       Customers
         </h1>
         <div className="flex items-center space-x-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="搜索目标客户..."
-              className="pl-8 w-[250px] rounded-lg border-gray-200 focus:border-primary"
+              placeholder="搜索客户..."
+              className="pl-8 w-[200px] rounded-lg border-gray-200 focus:border-primary"
               value={searchTerm}
               onChange={handleSearch}
             />
@@ -249,14 +249,14 @@ export function TargetCustomersPage() {
           </Select>
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="rounded-lg bg-gradient-to-r from-brand-purple to-brand-pink hover:from-brand-purple/90 hover:to-brand-pink/90 transition-all duration-300">
-                <Plus className="mr-2 h-4 w-4" />
-                添加目标客户
+              <Button size="sm" className="text-xs h-8 flex gap-1 px-2">
+                <Plus className="h-3.5 w-3.5" />
+                添加客户
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px] rounded-xl">
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle className="text-lg">添加目标客户</DialogTitle>
+                <DialogTitle className="text-lg">添加客户</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -387,13 +387,13 @@ export function TargetCustomersPage() {
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/40">
               <TableHead className="w-[60px] py-3">序号</TableHead>
-              <TableHead className="py-3">客户名称</TableHead>
-              <TableHead className="py-3">客户需求</TableHead>
-              <TableHead className="py-3">项目阶段</TableHead>
-              <TableHead className="py-3">优势</TableHead>
-              <TableHead className="py-3">劣势</TableHead>
-              <TableHead className="py-3">可能性</TableHead>
-              <TableHead className="py-3">金额</TableHead>
+              <TableHead className="py-3 w-[140px]">客户名称</TableHead>
+              <TableHead className="py-3 w-[160px]">客户需求</TableHead>
+              <TableHead className="py-3 w-[100px]">项目阶段</TableHead>
+              <TableHead className="py-3 w-[120px]">优势</TableHead>
+              <TableHead className="py-3 w-[120px]">劣势</TableHead>
+              <TableHead className="py-3 w-[80px]">可能性</TableHead>
+              <TableHead className="py-3 text-right w-[100px]">金额</TableHead>
               <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>

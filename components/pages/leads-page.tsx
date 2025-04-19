@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Filter, ArrowUpDown, MoreHorizontal } from "lucide-react"
+import { Plus, Search, Filter, ArrowUpDown, MoreHorizontal, Trash2 } from "lucide-react"
 import { motion } from "framer-motion"
 import {
   DropdownMenu,
@@ -39,6 +39,7 @@ interface Lead {
   possibility: string;
   date: Date;
   quarter: string;
+  amount: number;
 }
 
 export function LeadsPage() {
@@ -46,6 +47,7 @@ export function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
+  // 在newLead初始值中添加amount
   const [newLead, setNewLead] = useState<Omit<Lead, 'id'>>({
     name: "",
     need: "",
@@ -55,7 +57,10 @@ export function LeadsPage() {
     possibility: "中",
     date: new Date(),
     quarter: getQuarter(new Date()),
+    amount: 0,
   });
+  
+ 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -191,11 +196,22 @@ export function LeadsPage() {
           possibility: "中",
           date: new Date(),
           quarter: getQuarter(new Date()),
+          amount: 0,
         });
       } catch (error) {
         console.error("Error adding lead:", error);
       }
     };
+
+  // 格式化金额
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -327,6 +343,19 @@ export function LeadsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="amount" className="text-right">
+                    金额
+                  </Label>
+                  <Input
+                    id="amount"
+                    name="amount"
+                    type="number"
+                    value={newLead.amount}
+                    onChange={handleInputChange}
+                    className="col-span-3 rounded-lg"
+                  />
+                </div>
               </div>
               <DialogFooter>
                 <DialogClose asChild>
@@ -357,28 +386,29 @@ export function LeadsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/40">
-              <TableHead className="w-[80px]">序号</TableHead>
-              <TableHead>
+              <TableHead className="w-[60px] py-3">序号</TableHead>
+              <TableHead className="py-3 w-[140px]">
                 <div className="flex items-center space-x-1">
                   <span>客户名称</span>
                   <ArrowUpDown className="h-3 w-3" />
                 </div>
               </TableHead>
-              <TableHead>客户需求</TableHead>
-              <TableHead>项目阶段</TableHead>
-              <TableHead>优势</TableHead>
-              <TableHead>劣势</TableHead>
-              <TableHead>可能性</TableHead>
-              <TableHead className="w-[80px]">操作</TableHead>
+              <TableHead className="py-3 w-[160px]">客户需求</TableHead>
+              <TableHead className="py-3 w-[100px]">项目阶段</TableHead>
+              <TableHead className="py-3 w-[120px]">优势</TableHead>
+              <TableHead className="py-3 w-[120px]">劣势</TableHead>
+              <TableHead className="py-3 w-[80px]">可能性</TableHead>
+              <TableHead className="py-3 text-right w-[100px]">金额</TableHead>
+              <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredLeads.length > 0 ? (
               filteredLeads.map((lead: Lead, index: number) => (
-                <TableRow key={lead.id}>
-                  <TableCell>{index + 1}</TableCell>
-                  <TableCell>{lead.name}</TableCell>
-                  <TableCell>{lead.need}</TableCell>
+                <TableRow key={lead.id} className="group">
+                  <TableCell className="font-medium">{index + 1}</TableCell>
+                  <TableCell className="font-medium">{lead.name}</TableCell>
+                  <TableCell className="max-w-[200px] truncate">{lead.need}</TableCell>
                   <TableCell>
                     <Badge className={getStageColor(lead.stage)}>{lead.stage}</Badge>
                   </TableCell>
@@ -389,23 +419,25 @@ export function LeadsPage() {
                       {lead.possibility}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleDeleteLead(lead.id!)}>删除</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <TableCell className="text-right font-medium">
+                    {formatAmount(lead.amount || 0)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteLead(lead.id!)}
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">删除</span>
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-4">
+                <TableCell colSpan={9} className="text-center py-4">
                   暂无数据
                 </TableCell>
               </TableRow>

@@ -184,6 +184,8 @@ export function ProjectsPage() {
                       <SelectValue placeholder="选择事务类型" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="电话">电话联系</SelectItem>
+                      <SelectItem value="拜访">客户拜访</SelectItem>
                       <SelectItem value="会议">会议</SelectItem>
                       <SelectItem value="培训">培训</SelectItem>
                       <SelectItem value="活动">活动</SelectItem>

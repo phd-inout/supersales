@@ -47,7 +47,7 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
   const pageTitles: {[key: string]: string} = {
     "leads": "Sales Leads",
     "prospects": "Potential Customers",
-    "targets": "Target Clients",
+    "targets": "Clients",
     "plans": "Project Planning",
     "goals": "Business Goals",
     "projects": "Project Management",
@@ -59,7 +59,7 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
   const navItems = [
     { id: "leads", label: "商机线索", icon: UserPlus, color: "text-brand-blue" },
     { id: "prospects", label: "潜在客户", icon: Users, color: "text-brand-indigo" },
-    { id: "targets", label: "目标客户", icon: UserCheck, color: "text-brand-purple" },
+    { id: "targets", label: "客户", icon: UserCheck, color: "text-brand-purple" },
     { id: "plans", label: "计划", icon: Calendar, color: "text-brand-pink" },
     { id: "goals", label: "目标", icon: Target, color: "text-brand-teal" },
     { id: "projects", label: "项目事务", icon: Briefcase, color: "text-brand-green" },
@@ -383,12 +383,23 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
             </div>
           </div>
         )}
-        <Button
+        <button
           onClick={() => setCollapsed(!collapsed)}
-          className="ml-auto text-muted-foreground hover:text-brand-purple h-7 w-7 rounded-full hover:bg-brand-purple/10 p-0"
+          className="ml-auto group flex items-center justify-center h-7 w-7 rounded-full hover:bg-brand-purple/5 p-0"
+          style={{ color: '#db2777' }}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+          {collapsed ? (
+            <ChevronRight 
+              className="h-4 w-4" 
+              style={{ color: 'inherit' }}
+            />
+          ) : (
+            <ChevronLeft 
+              className="h-4 w-4" 
+              style={{ color: 'inherit' }}
+            />
+          )}
+        </button>
       </div>
       <div className="flex-1 overflow-auto py-3 px-2">
         <nav className="grid gap-1.5">

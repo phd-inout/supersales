@@ -48,6 +48,7 @@ interface Plan {
   week: number
   year: number
   completed: boolean
+  type: string
 }
 
 interface WeekData {
@@ -80,6 +81,7 @@ export function PlansPage() {
     week: getWeekNumber(new Date()),
     year: new Date().getFullYear(),
     completed: false,
+    type: "其他",
   })
 
   // 获取客户列表
@@ -169,8 +171,14 @@ export function PlansPage() {
 
   const handleAddPlan = async () => {
     try {
+      // 确保plan有type字段
+      const planToAdd = { ...newPlan };
+      if (!planToAdd.type || planToAdd.type === "") {
+        planToAdd.type = "其他";
+      }
+      
       // 添加到数据库
-      await add("plans", newPlan)
+      await add("plans", planToAdd)
 
       // 如果添加的计划是当前选中的周，则刷新计划列表
       if (newPlan.year === selectedYear && newPlan.week === selectedWeek) {
@@ -190,6 +198,7 @@ export function PlansPage() {
         week: getWeekNumber(new Date()),
         year: new Date().getFullYear(),
         completed: false,
+        type: "其他", // 保持默认类型
       })
     } catch (error) {
       console.error("Error adding plan:", error)
@@ -216,7 +225,12 @@ export function PlansPage() {
 
   const handleToggleComplete = async (plan: Plan) => {
     try {
-      const updatedPlan = { ...plan, completed: !plan.completed }
+      // 确保plan有type字段
+      const updatedPlan = { ...plan, completed: !plan.completed };
+      if (!updatedPlan.type || updatedPlan.type === "") {
+        updatedPlan.type = "其他";
+      }
+      
       await put("plans", updatedPlan)
 
       // 更新状态
@@ -322,6 +336,23 @@ export function PlansPage() {
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="type" className="text-right text-sm">
+                    计划类型
+                  </Label>
+                  <Select value={newPlan.type} onValueChange={(value) => handleSelectChange("type", value)}>
+                    <SelectTrigger className="col-span-3 rounded-lg">
+                      <SelectValue placeholder="选择类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="电话">电话联系</SelectItem>
+                      <SelectItem value="拜访">客户拜访</SelectItem>
+                      <SelectItem value="会议">内部会议</SelectItem>
+                      <SelectItem value="培训">培训活动</SelectItem>
+                      <SelectItem value="其他">其他事项</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="customer" className="text-right text-sm">
@@ -471,6 +502,7 @@ export function PlansPage() {
                   <ArrowUpDown className="h-3 w-3" />
                 </div>
               </TableHead>
+              <TableHead className="py-3">类型</TableHead>
               <TableHead className="py-3">关联客户</TableHead>
               <TableHead className="py-3">日期</TableHead>
               <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
@@ -501,6 +533,7 @@ export function PlansPage() {
                   >
                     {plan.task}
                   </TableCell>
+                  <TableCell className="py-1.5 text-sm">{plan.type || "其他"}</TableCell>
                   <TableCell className="py-1.5 text-sm">{plan.customer}</TableCell>
                   <TableCell className="py-1.5 text-sm">{format(new Date(plan.date), "yyyy-MM-dd")}</TableCell>
                   <TableCell className="py-1.5 text-right">
@@ -544,6 +577,23 @@ export function PlansPage() {
                               onChange={handleInputChange}
                               className="col-span-3 rounded-lg"
                             />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="type" className="text-right">
+                              计划类型
+                            </Label>
+                            <Select value={newPlan.type} onValueChange={(value) => handleSelectChange("type", value)}>
+                              <SelectTrigger className="col-span-3 rounded-lg">
+                                <SelectValue placeholder="选择类型" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="电话">电话联系</SelectItem>
+                                <SelectItem value="拜访">客户拜访</SelectItem>
+                                <SelectItem value="会议">内部会议</SelectItem>
+                                <SelectItem value="培训">培训活动</SelectItem>
+                                <SelectItem value="其他">其他事项</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="customer" className="text-right">

@@ -33,13 +33,16 @@ interface Prospect {
   advantage: string;
   disadvantage: string; 
   possibility: string;
+  amount: number;
   date: Date;
 }
 
 export function ProspectsPage() {
   const [prospects, setProspects] = useState<Prospect[]>([])
+  const [filteredProspects, setFilteredProspects] = useState<Prospect[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
   const [newProspect, setNewProspect] = useState<Prospect>({
     name: "",
     need: "",
@@ -48,6 +51,7 @@ export function ProspectsPage() {
     disadvantage: "",
     possibility: "中",
     date: new Date(),
+    amount: 0,
   })
 
   useEffect(() => {
@@ -57,6 +61,7 @@ export function ProspectsPage() {
         const { getAll } = await import("@/lib/db-service")
         const prospectsData = await getAll("prospects")
         setProspects(prospectsData as Prospect[])
+        filterProspectsByPeriod(prospectsData as Prospect[], period)
       } catch (error) {
         console.error("Error fetching prospects data:", error)
       } finally {
@@ -67,15 +72,68 @@ export function ProspectsPage() {
     fetchData()
   }, [])
 
-  const handleSearch = (e: ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value)
+  useEffect(() => {
+    filterProspectsByPeriod(prospects, period)
+  }, [period, prospects])
+
+  const filterProspectsByPeriod = (data: Prospect[], period: string) => {
+    const now = new Date()
+    const filtered = data.filter(prospect => {
+      const prospectDate = new Date(prospect.date)
+      switch (period) {
+        case "weekly":
+          return getWeekNumber(prospectDate) === getWeekNumber(now) && 
+                 prospectDate.getFullYear() === now.getFullYear()
+        case "monthly":
+          return prospectDate.getMonth() === now.getMonth() && 
+                 prospectDate.getFullYear() === now.getFullYear()
+        case "quarterly":
+          return getQuarter(prospectDate) === getQuarter(now) && 
+                 prospectDate.getFullYear() === now.getFullYear()
+        case "yearly":
+          return prospectDate.getFullYear() === now.getFullYear()
+        default:
+          return true
+      }
+    })
+    
+    // 应用搜索过滤
+    const searchFiltered = filtered.filter(
+      (prospect) =>
+        prospect.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        prospect.need.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    
+    setFilteredProspects(searchFiltered)
   }
 
-  const filteredProspects = prospects.filter(
-    (prospect) =>
-      prospect.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      prospect.need.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  // 辅助函数：获取周数
+  const getWeekNumber = (date: Date) => {
+    const firstDay = new Date(date.getFullYear(), 0, 1)
+    const pastDays = (date.getTime() - firstDay.getTime()) / 86400000
+    return Math.ceil((pastDays + firstDay.getDay() + 1) / 7)
+  }
+
+  // 辅助函数：获取季度
+  const getQuarter = (date: Date) => {
+    return Math.floor(date.getMonth() / 3) + 1
+  }
+
+  const handleSearch = (e: ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
+    // 当搜索条件改变时重新过滤数据
+    filterProspectsByPeriod(prospects, period)
+  }
+
+  // 格式化金额
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -104,6 +162,7 @@ export function ProspectsPage() {
         disadvantage: "",
         possibility: "中",
         date: new Date(),
+        amount: 0,
       })
     } catch (error) {
       console.error("Error adding prospect:", error)
@@ -132,10 +191,12 @@ export function ProspectsPage() {
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
       case "需求调研":
         return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300"
-      case "方案设计":
+      case "提案":
         return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
       case "商务谈判":
         return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300"
+         case "完成":
+        return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-green-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
     }
@@ -184,6 +245,17 @@ export function ProspectsPage() {
               onChange={handleSearch}
             />
           </div>
+          <Select value={period} onValueChange={(value) => setPeriod(value as any)}>
+            <SelectTrigger className="w-[120px] rounded-lg">
+              <SelectValue placeholder="显示周期" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekly">本周</SelectItem>
+              <SelectItem value="monthly">本月</SelectItem>
+              <SelectItem value="quarterly">本季度</SelectItem>
+              <SelectItem value="yearly">本年</SelectItem>
+            </SelectContent>
+          </Select>
           <Dialog>
             <DialogTrigger asChild>
               <Button className="rounded-lg bg-gradient-to-r from-brand-indigo to-brand-purple hover:from-brand-indigo/90 hover:to-brand-purple/90 transition-all duration-300">
@@ -231,8 +303,9 @@ export function ProspectsPage() {
                     <SelectContent>
                       <SelectItem value="初步接触">初步接触</SelectItem>
                       <SelectItem value="需求调研">需求调研</SelectItem>
-                      <SelectItem value="方案设计">方案设计</SelectItem>
+                      <SelectItem value="提案">提案</SelectItem>
                       <SelectItem value="商务谈判">商务谈判</SelectItem>
+                      <SelectItem value="完成">完成</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -278,6 +351,20 @@ export function ProspectsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="amount" className="text-right">
+                    金额
+                  </Label>
+                  <Input
+                    id="amount"
+                    name="amount"
+                    type="number"
+                    value={newProspect.amount}
+                    onChange={handleInputChange}
+                    className="col-span-3 rounded-lg"
+                    placeholder="请输入金额"
+                  />
+                </div>
               </div>
               <DialogFooter>
                 <DialogClose asChild>
@@ -309,12 +396,13 @@ export function ProspectsPage() {
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/40">
               <TableHead className="w-[60px] py-3">序号</TableHead>
-              <TableHead className="py-3">客户名称</TableHead>
-              <TableHead className="py-3">客户需求</TableHead>
-              <TableHead className="py-3">项目阶段</TableHead>
-              <TableHead className="py-3">优势</TableHead>
-              <TableHead className="py-3">劣势</TableHead>
-              <TableHead className="py-3">可能性</TableHead>
+              <TableHead className="py-3 w-[140px]">客户名称</TableHead>
+              <TableHead className="py-3 w-[160px]">客户需求</TableHead>
+              <TableHead className="py-3 w-[100px]">项目阶段</TableHead>
+              <TableHead className="py-3 w-[120px]">优势</TableHead>
+              <TableHead className="py-3 w-[120px]">劣势</TableHead>
+              <TableHead className="py-3 w-[80px]">可能性</TableHead>
+              <TableHead className="py-3 text-right w-[100px]">金额</TableHead>
               <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -343,6 +431,7 @@ export function ProspectsPage() {
                     {prospect.possibility}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-right font-medium">{formatAmount(prospect.amount || 0)}</TableCell>
                 <TableCell className="text-right">
                   <Button
                     className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity")}

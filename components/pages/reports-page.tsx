@@ -20,7 +20,7 @@ import {
   Cell,
 } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Phone, Users, UserPlus, DollarSign, Briefcase, PercentSquare, Award } from "lucide-react"
+import { Phone, Users, UserPlus, DollarSign, Briefcase, PercentSquare, Award, RefreshCw, DatabaseIcon, WrenchIcon } from "lucide-react"
 import { motion } from "framer-motion"
 import {
   getWeeklyStats,
@@ -35,8 +35,11 @@ import {
   getProspectsCount,
   getVisitsCount,
   getPhoneCallsCount,
+  resetDatabase,
+  fixPlansData,
 } from "@/lib/db-service"
 import { PerformanceWeightsDialog } from "./performance-weights-dialog"
+import { Button } from "@/components/ui/button"
 
 const COLORS = ["#2563eb", "#4f46e5", "#7c3aed", "#db2777"]
 
@@ -56,6 +59,21 @@ interface PieChartData {
 
 // 添加PPT相关尺寸常量
 const PPT_ASPECT_RATIO = 16 / 9; // PPT 16:9宽高比
+// 添加图表固定尺寸常量
+const CHART_WIDTH = 450; // 图表固定宽度
+const CHART_HEIGHT = 240; // 图表固定高度
+const PIE_CHART_SIZE = 180; // 饼图最大直径尺寸
+
+// 自定义柱状图颜色
+const BAR_COLORS = {
+  线索: "#2563eb", // 蓝色
+  潜在客户: "#4f46e5", // 靛蓝色
+  电话: "#7c3aed", // 紫色
+  拜访: "#db2777", // 粉红色
+};
+
+// 自定义饼图颜色和样式
+const PIE_COLORS = ["#2563eb", "#4f46e5", "#7c3aed", "#db2777", "#06b6d4", "#059669", "#ca8a04", "#dc2626"];
 
 export function ReportsPage() {
   const [period, setPeriod] = useState("weekly")
@@ -95,65 +113,79 @@ export function ReportsPage() {
 
   // 加载数据
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-
-        // 获取当前周期的数据
-        let periodData
-        switch (period) {
-          case "weekly":
-            periodData = await getWeeklyStats()
-            break
-          case "monthly":
-            periodData = await getMonthlyStats()
-            break
-          case "quarterly":
-            periodData = await getQuarterlyStats()
-            break
-          case "yearly":
-            periodData = await getYearlyStats()
-            break
-          default:
-            periodData = await getWeeklyStats()
-        }
-
-        // 获取汇总数据
-        const summary = await getReportSummary(period)
-
-        // 获取饼图数据
-        const distribution = await getCustomerDistribution()
-
-        // 获取实际数据统计
-        const leadsCount = await getLeadsCount()
-        const prospectsCount = await getProspectsCount()
-        const targetsCount = await getTargetsCount()
-        const visitsCount = await getVisitsCount()
-        const phoneCallsCount = await getPhoneCallsCount()
-        const contractsAmount = await getContractsAmount()
-
-        // 更新状态
-        setCurrentData(periodData)
-        setSummaryData(summary)
-        setPieData(distribution)
-        setActualData({
-          leadsCount,
-          prospectsCount,
-          targetsCount,
-          visitsCount,
-          phoneCallsCount,
-          contractsAmount,
-        })
-      } catch (err: any) {
-        console.error("Error fetching report data:", err)
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchData()
   }, [period])
+
+  // 提取获取数据的逻辑到单独的函数
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+
+      // 获取当前周期的数据
+      let periodData
+      switch (period) {
+        case "weekly":
+          periodData = await getWeeklyStats()
+          break
+        case "monthly":
+          periodData = await getMonthlyStats()
+          break
+        case "quarterly":
+          periodData = await getQuarterlyStats()
+          break
+        case "yearly":
+          periodData = await getYearlyStats()
+          break
+        default:
+          periodData = await getWeeklyStats()
+      }
+
+      // 获取汇总数据
+      const summary = await getReportSummary(period)
+
+      // 获取饼图数据
+      const distribution = await getCustomerDistribution()
+
+      // 获取实际数据统计
+      const leadsCount = await getLeadsCount()
+      const prospectsCount = await getProspectsCount()
+      const targetsCount = await getTargetsCount()
+      const visitsCount = await getVisitsCount()
+      const phoneCallsCount = await getPhoneCallsCount()
+      const contractsAmount = await getContractsAmount()
+
+      console.log('刷新数据:', {
+        phoneCallsCount,
+        visitsCount
+      })
+
+      // 更新状态
+      setCurrentData(periodData)
+      setSummaryData(summary)
+      setPieData(distribution)
+      setActualData({
+        leadsCount,
+        prospectsCount,
+        targetsCount,
+        visitsCount,
+        phoneCallsCount,
+        contractsAmount,
+      })
+
+      // 计算转化率 - 新公式：合同客户数量/(潜在客户数量+线索商机数量)
+      const contractsCount = await getContractsAmount(); // 获取合同数量，代表已转化的客户
+      const totalLeadsAndProspects = summary.newLeads + summary.newProspects;
+      
+      if (totalLeadsAndProspects > 0) {
+        summary.conversionRate = Math.round((contractsCount / totalLeadsAndProspects) * 100);
+      }
+    } catch (err: any) {
+      console.error("Error fetching report data:", err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const container = {
     hidden: { opacity: 0 },
@@ -237,7 +269,18 @@ export function ReportsPage() {
     return { score, grade }
   }
 
+  // 计算柱状图显示量
+  const getDataForBarChart = () => {
+    // 限制最多显示6条数据
+    const limitedData = [...currentData];
+    if (limitedData.length > 6) {
+      limitedData.splice(0, limitedData.length - 6);
+    }
+    return limitedData;
+  }
+
   const performanceResult = calculatePerformanceScore()
+  const barChartData = getDataForBarChart()
 
   return (
     <div className="p-4 h-full flex flex-col" style={{ aspectRatio: PPT_ASPECT_RATIO, maxWidth: '100%', margin: '0 auto' }}>
@@ -250,8 +293,61 @@ export function ReportsPage() {
             transition={{ duration: 0.5 }}
           >
             Sales Report
-                      </motion.h1>
+          </motion.h1>
           <PerformanceWeightsDialog weights={weights} onWeightsChange={setWeights} />
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="ml-2 rounded-full h-8 w-8 p-0" 
+            onClick={() => fetchData()}
+            title="刷新数据"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="ml-2 rounded-full h-8 w-8 p-0" 
+            onClick={async () => {
+              if (confirm("确定要重置数据库吗？这将重置数据库结构，但会尝试保留您的数据。")) {
+                setLoading(true);
+                try {
+                  const result = await resetDatabase();
+                  alert(result.message);
+                  await fetchData();
+                } catch (error) {
+                  alert("重置数据库失败，请查看控制台获取详细信息");
+                  console.error(error);
+                } finally {
+                  setLoading(false);
+                }
+              }
+            }}
+            title="重置数据库"
+          >
+            <DatabaseIcon className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="ml-2 rounded-full h-8 w-8 p-0" 
+            onClick={async () => {
+              setLoading(true);
+              try {
+                const result = await fixPlansData();
+                alert(result.message);
+                await fetchData();
+              } catch (error) {
+                alert("修复计划数据失败，请查看控制台获取详细信息");
+                console.error(error);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            title="修复计划数据"
+          >
+            <WrenchIcon className="h-4 w-4" />
+          </Button>
         </div>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -389,14 +485,14 @@ export function ReportsPage() {
         <motion.div variants={item}>
           <Card className="overflow-hidden h-[130px]">
             <CardHeader className="flex flex-row items-center justify-between pb-1 space-y-0 p-2">
-              <CardTitle className="text-xs font-medium">潜在客户转化率</CardTitle>
+              <CardTitle className="text-xs font-medium">客户转化率</CardTitle>
               <div className="stat-icon">
                 <PercentSquare className="h-3 w-3" />
               </div>
             </CardHeader>
             <CardContent className="p-2">
               <div className="text-xl font-bold">{summaryData.conversionRate}%</div>
-              <p className="text-xs text-muted-foreground mt-0.5">新增潜在客户/新增线索</p>
+              <p className="text-xs text-muted-foreground mt-0.5">客户数量/(线索+潜在客户数量)</p>
               <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-brand-teal rounded-full"
@@ -417,7 +513,7 @@ export function ReportsPage() {
             </CardHeader>
             <CardContent className="p-2">
               <div className="text-xl font-bold">¥{summaryData.potentialValue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-0.5">预估潜在商机总金额</p>
+              <p className="text-xs text-muted-foreground mt-0.5">线索和潜在客户的商机总金额</p>
               <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div className="h-full bg-brand-green rounded-full" style={{ width: "65%" }}></div>
               </div>
@@ -435,7 +531,7 @@ export function ReportsPage() {
             </CardHeader>
             <CardContent className="p-2">
               <div className="text-xl font-bold">¥{summaryData.contractValue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-0.5">预估合同总金额</p>
+              <p className="text-xs text-muted-foreground mt-0.5">客户和已签约合同的总金额</p>
               <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div className="h-full bg-brand-amber rounded-full" style={{ width: "70%" }}></div>
               </div>
@@ -480,33 +576,84 @@ export function ReportsPage() {
             <CardHeader className="bg-gradient-to-r from-brand-purple/5 to-brand-pink/5 p-2">
               <CardTitle className="text-sm">转化率趋势图</CardTitle>
             </CardHeader>
-            <CardContent className="p-3 flex-1">
+            <CardContent className="p-3 flex-1 flex items-center justify-center">
               {currentData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300} className="pt-2 px-2">
-                  <BarChart data={currentData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} domain={[0, 'auto']} />
+                <div style={{ width: CHART_WIDTH, height: CHART_HEIGHT }} className="mx-auto">
+                  <BarChart 
+                    width={CHART_WIDTH} 
+                    height={CHART_HEIGHT} 
+                    data={barChartData}
+                    margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
+                    barGap={4}
+                    barCategoryGap={8}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      tick={{ fontSize: 9 }} 
+                      height={20}
+                      tickLine={false}
+                      axisLine={{ stroke: '#E5E7EB' }}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 9 }} 
+                      domain={[0, 'auto']} 
+                      width={30}
+                      tickLine={false}
+                      axisLine={{ stroke: '#E5E7EB' }}
+                    />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "rgba(255, 255, 255, 0.9)",
-                        borderRadius: "8px",
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                        backgroundColor: "rgba(255, 255, 255, 0.95)",
+                        borderRadius: "6px",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
                         border: "none",
-                        fontSize: "10px",
+                        fontSize: "9px",
+                        padding: "6px"
                       }}
+                      cursor={{ fill: 'rgba(240, 240, 240, 0.3)' }}
                     />
                     <Legend 
-                      iconSize={8} 
-                      wrapperStyle={{ fontSize: 10 }}
+                      iconSize={6} 
+                      wrapperStyle={{ fontSize: 9 }}
                       layout="horizontal"
                       verticalAlign="bottom"
                       align="center"
+                      height={20}
                     />
-                    <Bar dataKey="新增线索" fill="#2563eb" radius={[4, 4, 0, 0]} name="新增线索" />
-                    <Bar dataKey="新增潜在客户" fill="#4f46e5" radius={[4, 4, 0, 0]} name="新增潜在客户" />
+                    <Bar 
+                      dataKey="新增线索" 
+                      fill={BAR_COLORS.线索}
+                      radius={[2, 2, 0, 0]} 
+                      name="新增线索"
+                      maxBarSize={18}
+                    />
+                    <Bar 
+                      dataKey="新增潜在客户" 
+                      fill={BAR_COLORS.潜在客户}
+                      radius={[2, 2, 0, 0]} 
+                      name="新增潜在客户"
+                      maxBarSize={18}
+                    />
+                    {/* 添加额外的数据指标，使用堆叠方式展示 */}
+                    <Bar 
+                      dataKey="电话联系" 
+                      fill={BAR_COLORS.电话}
+                      radius={[2, 2, 0, 0]} 
+                      name="电话联系"
+                      maxBarSize={18}
+                      stackId="a"
+                    />
+                    <Bar 
+                      dataKey="拜访数量" 
+                      fill={BAR_COLORS.拜访}
+                      radius={[2, 2, 0, 0]} 
+                      name="拜访数量"
+                      maxBarSize={18}
+                      stackId="a"
+                    />
                   </BarChart>
-                </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-muted-foreground">暂无数据</p>
@@ -520,42 +667,61 @@ export function ReportsPage() {
             <CardHeader className="bg-gradient-to-r from-brand-teal/5 to-brand-green/5 p-2">
               <CardTitle className="text-sm">客户分布</CardTitle>
             </CardHeader>
-            <CardContent className="p-3 flex-1">
+            <CardContent className="p-3 flex-1 flex items-center justify-center">
               {pieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300} className="pt-2 px-2">
-                  <PieChart>
+                <div style={{ width: CHART_WIDTH, height: CHART_HEIGHT }} className="mx-auto">
+                  <PieChart
+                    width={CHART_WIDTH}
+                    height={CHART_HEIGHT}
+                  >
                     <Pie
                       data={pieData}
-                      cx="50%"
-                      cy="40%"
+                      cx={CHART_WIDTH / 2}
+                      cy={CHART_HEIGHT / 2 - 15}
                       labelLine={false}
-                      outerRadius={120}
+                      innerRadius={PIE_CHART_SIZE * 0.3}
+                      outerRadius={PIE_CHART_SIZE * 0.5}
                       fill="#8884d8"
+                      paddingAngle={2}
                       dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }) => {
+                        return percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : '';
+                      }}
                     >
                       {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={PIE_COLORS[index % PIE_COLORS.length]} 
+                          stroke="rgba(255,255,255,0.5)"
+                          strokeWidth={1}
+                        />
                       ))}
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "rgba(255, 255, 255, 0.9)",
-                        borderRadius: "8px",
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                        backgroundColor: "rgba(255, 255, 255, 0.95)",
+                        borderRadius: "6px",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
                         border: "none",
-                        fontSize: "10px",
+                        fontSize: "9px",
+                        padding: "6px"
+                      }}
+                      formatter={(value: any, name) => {
+                        const total = pieData.reduce((sum, item) => sum + item.value, 0);
+                        const percentage = ((value as number) / total * 100).toFixed(1);
+                        return [`${value} (${percentage}%)`, name];
                       }}
                     />
                     <Legend 
-                      iconSize={8} 
-                      wrapperStyle={{ fontSize: 10 }}
+                      iconSize={6} 
+                      wrapperStyle={{ fontSize: 9 }}
                       layout="horizontal"
                       verticalAlign="bottom"
                       align="center"
+                      height={20}
                     />
                   </PieChart>
-                </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-muted-foreground">暂无数据</p>
