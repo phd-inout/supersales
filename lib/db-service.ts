@@ -3,7 +3,7 @@ import { getWeekNumber, getWeekRange } from "./date-utils"
 
 // 初始化数据库
 export async function initDB() {
-  const db = await openDB("salesManagementDB", 2, {
+  const db = await openDB("salesManagementDB", 3, {
     upgrade(db, oldVersion, newVersion) {
       console.log(`数据库升级: 从版本 ${oldVersion} 到 ${newVersion}`);
       
@@ -87,6 +87,13 @@ export async function initDB() {
         contractsStore.createIndex("customer", "customer", { unique: false })
         contractsStore.createIndex("amount", "amount", { unique: false })
         contractsStore.createIndex("date", "date", { unique: false })
+      }
+      
+      // 创建用户设置表
+      if (!db.objectStoreNames.contains("userSettings")) {
+        const userSettingsStore = db.createObjectStore("userSettings", { keyPath: "id", autoIncrement: true })
+        userSettingsStore.createIndex("companyName", "companyName", { unique: false })
+        userSettingsStore.createIndex("userName", "userName", { unique: false })
       }
     },
   })
@@ -572,6 +579,55 @@ export async function getYearlyStats() {
   }
 
   return result
+}
+
+// 用户设置相关操作
+export async function getUserSettings() {
+  try {
+    const db = await initDB()
+    // 获取所有用户设置记录
+    const settings = await db.getAll("userSettings")
+    
+    // 如果有设置记录，返回最新的一条
+    if (settings && settings.length > 0) {
+      return settings[settings.length - 1]
+    }
+    
+    // 如果没有记录，返回默认设置
+    return {
+      companyName: "超级销售管理系统",
+      userName: "销售经理"
+    }
+  } catch (error) {
+    console.error("获取用户设置时出错:", error)
+    // 出错时返回默认设置
+    return {
+      companyName: "超级销售管理系统",
+      userName: "销售经理"
+    }
+  }
+}
+
+export async function saveUserSettings(settings: { companyName: string; userName: string }) {
+  try {
+    const db = await initDB()
+    
+    // 获取现有设置
+    const existingSettings = await db.getAll("userSettings")
+    
+    if (existingSettings && existingSettings.length > 0) {
+      // 如果有现有设置，更新最新的一条
+      const latestSetting = existingSettings[existingSettings.length - 1]
+      await db.put("userSettings", { ...settings, id: latestSetting.id })
+      return latestSetting.id
+    } else {
+      // 如果没有现有设置，创建新记录
+      return await db.add("userSettings", settings)
+    }
+  } catch (error) {
+    console.error("保存用户设置时出错:", error)
+    throw error
+  }
 }
 
 // 获取客户分布数据
