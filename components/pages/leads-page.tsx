@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getAll, add, remove, put, initSampleData } from "@/lib/db-service"
+import { getAll, add, remove, put, initSampleData, convertToCustomer } from "@/lib/db-service"
 
 interface Lead {
   id?: string | number;
@@ -216,6 +216,21 @@ export function LeadsPage() {
         // 更新现有商机
         await put("leads", selectedLead);
         setLeads(prev => prev.map(item => item.id === selectedLead.id ? selectedLead : item));
+        
+        // 如果商机进入商务谈判阶段且可能性为高，自动转换为客户
+        if (selectedLead.stage === "商务谈判" && selectedLead.possibility === "高" && selectedLead.id) {
+          try {
+            const result = await convertToCustomer("leads", typeof selectedLead.id === 'string' 
+              ? parseInt(selectedLead.id) 
+              : selectedLead.id);
+            if (result.success) {
+              alert(`线索已自动转换为客户: ${result.message}`);
+            }
+          } catch (convError) {
+            console.error("转换客户时出错:", convError);
+          }
+        }
+        
         setSelectedLead(null);
       } else {
         // 添加新商机

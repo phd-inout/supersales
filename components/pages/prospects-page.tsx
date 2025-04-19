@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils"
 import type { FormEvent } from "react"
 import { buttonVariants } from "@/components/ui/button"
 import { badgeVariants } from "@/components/ui/badge"
-import { getAll, add, remove, put } from "@/lib/db-service"
+import { getAll, add, remove, put, convertToCustomer } from "@/lib/db-service"
 import { getWeekNumber } from "@/lib/date-utils"
 
 // 定义Prospect接口
@@ -164,11 +164,29 @@ export function ProspectsPage() {
   const handleSubmit = async () => {
     try {
       if (selectedProspect) {
+        // 更新现有潜在客户
         const { put } = await import("@/lib/db-service")
         await put("prospects", selectedProspect);
         setProspects(prev => prev.map(item => item.id === selectedProspect.id ? selectedProspect : item));
+        
+        // 如果潜在客户进入商务谈判阶段且可能性为高，自动转换为客户
+        if (selectedProspect.stage === "商务谈判" && selectedProspect.possibility === "高" && selectedProspect.id) {
+          try {
+            const { convertToCustomer } = await import("@/lib/db-service")
+            const result = await convertToCustomer("prospects", typeof selectedProspect.id === 'string' 
+              ? parseInt(selectedProspect.id) 
+              : selectedProspect.id);
+            if (result.success) {
+              alert(`潜在客户已自动转换为客户: ${result.message}`);
+            }
+          } catch (convError) {
+            console.error("转换客户时出错:", convError);
+          }
+        }
+        
         setSelectedProspect(null);
       } else {
+        // 添加新潜在客户
         const { add } = await import("@/lib/db-service")
         const id = await add("prospects", newProspect)
 

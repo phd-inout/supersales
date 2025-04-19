@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Search, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { getAll, add, remove, put } from "@/lib/db-service"
+import { getAll, add, remove, put, convertToCustomer } from "@/lib/db-service"
 import { getWeekNumber } from "@/lib/date-utils"
 
 interface Target {
@@ -154,6 +154,21 @@ export function TargetCustomersPage() {
         // 更新现有客户
         await put("targets", selectedTarget);
         setTargets(prev => prev.map(item => item.id === selectedTarget.id ? selectedTarget : item));
+        
+        // 如果目标客户可能性为高，自动转换为客户
+        if (selectedTarget.possibility === "高" && selectedTarget.id) {
+          try {
+            const result = await convertToCustomer("targets", typeof selectedTarget.id === 'string' 
+              ? parseInt(selectedTarget.id) 
+              : selectedTarget.id);
+            if (result.success) {
+              alert(`目标客户已自动转换为正式客户: ${result.message}`);
+            }
+          } catch (convError) {
+            console.error("转换客户时出错:", convError);
+          }
+        }
+        
         setSelectedTarget(null);
       } else {
         // 添加新客户

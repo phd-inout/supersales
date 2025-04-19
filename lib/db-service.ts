@@ -974,3 +974,40 @@ export async function resetDatabase() {
     return { success: false, message: "重置数据库失败" };
   }
 }
+
+// 将线索/潜在客户/目标客户转换为正式客户
+export async function convertToCustomer(sourceName: string, sourceId: number) {
+  try {
+    const db = await initDB();
+    
+    // 从源表获取数据
+    const sourceItem = await get(sourceName, sourceId);
+    if (!sourceItem) {
+      throw new Error(`未找到ID为${sourceId}的${sourceName}记录`);
+    }
+    
+    // 准备要插入的客户数据
+    const customerData = {
+      name: sourceItem.name,
+      contact: sourceItem.contact || "",
+      type: "新客户",
+      industry: sourceItem.industry || "",
+      rating: "B",
+      tags: sourceItem.tags || [],
+      joinDate: new Date()
+    };
+    
+    // 添加到客户表
+    const customerId = await add("customers", customerData);
+    console.log(`成功将${sourceName} ID:${sourceId}转换为客户 ID:${customerId}`);
+    
+    return {
+      success: true,
+      customerId,
+      message: `已成功将${sourceName}转换为客户`
+    };
+  } catch (error) {
+    console.error(`转换为客户时出错:`, error);
+    throw new Error(`转换失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
