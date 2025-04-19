@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, ChangeEvent } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,12 +17,14 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Trash2 } from "lucide-react"
+import { Plus, Search, Filter, ArrowUpDown, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
-import type { ChangeEvent, FormEvent } from "react"
+import type { FormEvent } from "react"
 import { buttonVariants } from "@/components/ui/button"
 import { badgeVariants } from "@/components/ui/badge"
+import { getAll, add, remove, put } from "@/lib/db-service"
+import { getWeekNumber } from "@/lib/date-utils"
 
 // 定义Prospect接口
 interface Prospect {
@@ -33,8 +35,8 @@ interface Prospect {
   advantage: string;
   disadvantage: string; 
   possibility: string;
-  amount: number;
   date: Date;
+  amount: number;
 }
 
 export function ProspectsPage() {
@@ -43,6 +45,8 @@ export function ProspectsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
+  const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [newProspect, setNewProspect] = useState<Prospect>({
     name: "",
     need: "",
@@ -137,37 +141,62 @@ export function ProspectsPage() {
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setNewProspect((prev) => ({ ...prev, [name]: value }))
+    if (selectedProspect) {
+      setSelectedProspect(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewProspect((prev) => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    setNewProspect((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleAddProspect = async () => {
-    try {
-      // 添加到数据库
-      const { add } = await import("@/lib/db-service")
-      const id = await add("prospects", newProspect)
-
-      // 更新状态
-      setProspects([...prospects, { ...newProspect, id: id as string | number }])
-
-      // 重置表单
-      setNewProspect({
-        name: "",
-        need: "",
-        stage: "需求调研",
-        advantage: "",
-        disadvantage: "",
-        possibility: "中",
-        date: new Date(),
-        amount: 0,
-      })
-    } catch (error) {
-      console.error("Error adding prospect:", error)
+    if (selectedProspect) {
+      setSelectedProspect(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewProspect((prev) => ({ ...prev, [name]: value }))
     }
   }
+
+  const handleEditProspect = (prospect: Prospect) => {
+    setSelectedProspect(prospect);
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    try {
+      if (selectedProspect) {
+        const { put } = await import("@/lib/db-service")
+        await put("prospects", selectedProspect);
+        setProspects(prev => prev.map(item => item.id === selectedProspect.id ? selectedProspect : item));
+        setSelectedProspect(null);
+      } else {
+        const { add } = await import("@/lib/db-service")
+        const id = await add("prospects", newProspect)
+
+        // 更新状态
+        setProspects([...prospects, { ...newProspect, id: id as string | number }])
+
+        // 重置表单
+        setNewProspect({
+          name: "",
+          need: "",
+          stage: "需求调研",
+          advantage: "",
+          disadvantage: "",
+          possibility: "中",
+          date: new Date(),
+          amount: 0,
+        })
+      }
+      setDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving prospect:", error)
+    }
+  }
+
+  const handleCloseDialog = () => {
+    setSelectedProspect(null);
+    setDialogOpen(false);
+  };
 
   // 添加删除功能
   const handleDeleteProspect = async (id: string | number) => {
@@ -191,12 +220,10 @@ export function ProspectsPage() {
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
       case "需求调研":
         return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300"
-      case "提案":
+      case "方案设计":
         return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
       case "商务谈判":
         return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300"
-         case "完成":
-        return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-green-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
     }
@@ -256,16 +283,16 @@ export function ProspectsPage() {
               <SelectItem value="yearly">本年</SelectItem>
             </SelectContent>
           </Select>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="rounded-lg bg-gradient-to-r from-brand-indigo to-brand-purple hover:from-brand-indigo/90 hover:to-brand-purple/90 transition-all duration-300">
+              <Button className="rounded-lg bg-gradient-to-r from-brand-indigo to-brand-purple hover:from-brand-indigo/90 hover:to-brand-purple/90 transition-all duration-300" onClick={() => setSelectedProspect(null)}>
                 <Plus className="mr-2 h-4 w-4" />
                 添加潜在客户
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] rounded-xl">
               <DialogHeader>
-                <DialogTitle className="text-lg">添加潜在客户</DialogTitle>
+                <DialogTitle className="text-lg">{selectedProspect ? "编辑潜在客户" : "添加潜在客户"}</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -275,7 +302,7 @@ export function ProspectsPage() {
                   <Input
                     id="name"
                     name="name"
-                    value={newProspect.name}
+                    value={selectedProspect ? selectedProspect.name : newProspect.name}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -287,7 +314,7 @@ export function ProspectsPage() {
                   <Textarea
                     id="need"
                     name="need"
-                    value={newProspect.need}
+                    value={selectedProspect ? selectedProspect.need : newProspect.need}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -296,16 +323,15 @@ export function ProspectsPage() {
                   <Label htmlFor="stage" className="text-right">
                     项目阶段
                   </Label>
-                  <Select value={newProspect.stage} onValueChange={(value: string) => handleSelectChange("stage", value)}>
+                  <Select value={selectedProspect ? selectedProspect.stage : newProspect.stage} onValueChange={(value) => handleSelectChange("stage", value)}>
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择项目阶段" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="初步接触">初步接触</SelectItem>
                       <SelectItem value="需求调研">需求调研</SelectItem>
-                      <SelectItem value="提案">提案</SelectItem>
+                      <SelectItem value="方案设计">方案设计</SelectItem>
                       <SelectItem value="商务谈判">商务谈判</SelectItem>
-                      <SelectItem value="完成">完成</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -316,7 +342,7 @@ export function ProspectsPage() {
                   <Input
                     id="advantage"
                     name="advantage"
-                    value={newProspect.advantage}
+                    value={selectedProspect ? selectedProspect.advantage : newProspect.advantage}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -328,7 +354,7 @@ export function ProspectsPage() {
                   <Input
                     id="disadvantage"
                     name="disadvantage"
-                    value={newProspect.disadvantage}
+                    value={selectedProspect ? selectedProspect.disadvantage : newProspect.disadvantage}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -338,8 +364,8 @@ export function ProspectsPage() {
                     可能性
                   </Label>
                   <Select
-                    value={newProspect.possibility}
-                    onValueChange={(value: string) => handleSelectChange("possibility", value)}
+                    value={selectedProspect ? selectedProspect.possibility : newProspect.possibility}
+                    onValueChange={(value) => handleSelectChange("possibility", value)}
                   >
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择可能性" />
@@ -353,33 +379,25 @@ export function ProspectsPage() {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="amount" className="text-right">
-                    金额
+                    金额 (元)
                   </Label>
                   <Input
                     id="amount"
                     name="amount"
                     type="number"
-                    value={newProspect.amount}
+                    value={selectedProspect ? String(selectedProspect.amount || 0) : String(newProspect.amount || 0)}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
-                    placeholder="请输入金额"
                   />
                 </div>
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button className={cn(buttonVariants({ variant: "outline" }), "rounded-lg")}>
-                    取消
-                  </Button>
+                  <Button variant="outline" onClick={handleCloseDialog}>取消</Button>
                 </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    onClick={handleAddProspect}
-                    className={cn("rounded-lg bg-gradient-to-r from-brand-indigo to-brand-purple")}
-                  >
-                    保存
-                  </Button>
-                </DialogClose>
+                <Button type="submit" onClick={handleSubmit}>
+                  {selectedProspect ? "更新" : "添加"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -403,46 +421,60 @@ export function ProspectsPage() {
               <TableHead className="py-3 w-[120px]">劣势</TableHead>
               <TableHead className="py-3 w-[80px]">可能性</TableHead>
               <TableHead className="py-3 text-right w-[100px]">金额</TableHead>
-              <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
+              <TableHead className="w-[100px] py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProspects.map((prospect, index) => (
-              <TableRow
-                key={prospect.id}
-                className={cn(
-                  "group",
-                  index % 2 === 0 ? "bg-white" : "bg-gray-50",
-                  "hover:bg-muted/20 dark:hover:bg-muted/20 dark:bg-gray-800 dark:even:bg-gray-900",
-                )}
-              >
-                <TableCell className="font-medium">{prospect.id}</TableCell>
-                <TableCell className="font-medium">{prospect.name}</TableCell>
-                <TableCell className="max-w-[200px] truncate">{prospect.need}</TableCell>
-                <TableCell>
-                  <Badge className={cn(badgeVariants({ variant: "outline" }), getStageColor(prospect.stage))}>
-                    {prospect.stage}
-                  </Badge>
-                </TableCell>
-                <TableCell>{prospect.advantage}</TableCell>
-                <TableCell>{prospect.disadvantage}</TableCell>
-                <TableCell>
-                  <Badge className={cn(badgeVariants({ variant: "outline" }), getPossibilityColor(prospect.possibility))}>
-                    {prospect.possibility}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-medium">{formatAmount(prospect.amount || 0)}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity")}
-                    onClick={() => handleDeleteProspect(prospect.id as string | number)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">删除</span>
-                  </Button>
+            {filteredProspects.length > 0 ? (
+              filteredProspects.map((prospect, index) => (
+                <TableRow key={prospect.id} className="group">
+                  <TableCell className="font-medium">{index + 1}</TableCell>
+                  <TableCell className="font-medium">{prospect.name}</TableCell>
+                  <TableCell className="max-w-[200px] truncate">{prospect.need}</TableCell>
+                  <TableCell>
+                    <Badge className={getStageColor(prospect.stage)}>{prospect.stage}</Badge>
+                  </TableCell>
+                  <TableCell>{prospect.advantage}</TableCell>
+                  <TableCell>{prospect.disadvantage}</TableCell>
+                  <TableCell>
+                    <Badge className={getPossibilityColor(prospect.possibility)}>
+                      {prospect.possibility}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatAmount(prospect.amount || 0)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditProspect(prospect)}
+                        className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity mr-1"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">编辑</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteProspect(prospect.id!)}
+                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">删除</span>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-4">
+                  暂无数据
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </motion.div>

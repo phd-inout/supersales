@@ -18,9 +18,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 // 在 import 部分添加更多图标
-import { Plus, Search, Trash2 } from "lucide-react"
+import { Plus, Search, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { getAll, add, remove, put } from "@/lib/db-service"
+import { getWeekNumber } from "@/lib/date-utils"
 
 interface Target {
   id?: string | number;
@@ -40,6 +42,10 @@ export function TargetCustomersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
+  // 添加选中的客户状态，用于编辑
+  const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
+  // 添加对话框显示状态
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState({
     name: "",
     need: "",
@@ -73,83 +79,112 @@ export function TargetCustomersPage() {
     filterTargetsByPeriod(targets, period)
   }, [period, targets])
 
-  const filterTargetsByPeriod = (data: Target[], period: string) => {
+  // 根据时间段筛选客户
+  const filterTargetsByPeriod = (targets: Target[], period: string) => {
     const now = new Date()
-    const filtered = data.filter(target => {
+    const currentWeek = getWeekNumber(now)
+    const currentMonth = now.getMonth()
+    const currentQuarter = Math.floor(currentMonth / 3)
+    const currentYear = now.getFullYear()
+
+    const filtered = targets.filter((target) => {
+      if (!target.date) return false
       const targetDate = new Date(target.date)
+      const targetWeek = getWeekNumber(targetDate)
+      const targetMonth = targetDate.getMonth()
+      const targetQuarter = Math.floor(targetMonth / 3)
+      const targetYear = targetDate.getFullYear()
+
       switch (period) {
         case "weekly":
-          return getWeekNumber(targetDate) === getWeekNumber(now) && 
-                 targetDate.getFullYear() === now.getFullYear()
+          return targetWeek === currentWeek && targetYear === currentYear
         case "monthly":
-          return targetDate.getMonth() === now.getMonth() && 
-                 targetDate.getFullYear() === now.getFullYear()
+          return targetMonth === currentMonth && targetYear === currentYear
         case "quarterly":
-          return getQuarter(targetDate) === getQuarter(now) && 
-                 targetDate.getFullYear() === now.getFullYear()
+          return targetQuarter === currentQuarter && targetYear === currentYear
         case "yearly":
-          return targetDate.getFullYear() === now.getFullYear()
+          return targetYear === currentYear
         default:
           return true
       }
     })
+
     setFilteredTargets(filtered)
-  }
-
-  // 辅助函数
-  const getWeekNumber = (date: Date) => {
-    const firstDay = new Date(date.getFullYear(), 0, 1)
-    const pastDays = (date.getTime() - firstDay.getTime()) / 86400000
-    return Math.ceil((pastDays + firstDay.getDay() + 1) / 7)
-  }
-
-  const getQuarter = (date: Date) => {
-    return Math.floor(date.getMonth() / 3) + 1
   }
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value)
+    const searchFiltered = filteredTargets.filter(
+      (target) =>
+        target.name.toLowerCase().includes(e.target.value.toLowerCase()) ||
+        target.need.toLowerCase().includes(e.target.value.toLowerCase()),
+    )
+    setFilteredTargets(searchFiltered.length > 0 || e.target.value ? searchFiltered : targets)
   }
 
+  // 处理输入变化
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setNewTarget((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleNumberInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    const numValue = Number.parseFloat(value) || 0
-    setNewTarget((prev) => ({ ...prev, [name]: numValue }))
-  }
-
-  const handleSelectChange = (name: string, value: string) => {
-    setNewTarget((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleAddTarget = async () => {
-    try {
-      // 添加到数据库
-      const { add } = await import("@/lib/db-service")
-      const id = await add("targets", newTarget)
-
-      // 更新状态
-      setTargets([...targets, { ...newTarget, id: id as string | number }])
-
-      // 重置表单
-      setNewTarget({
-        name: "",
-        need: "",
-        stage: "商务谈判",
-        advantage: "",
-        disadvantage: "",
-        possibility: "高",
-        amount: 0, // 重置金额
-        date: new Date(),
-      })
-    } catch (error) {
-      console.error("Error adding target:", error)
+    if (selectedTarget) {
+      setSelectedTarget(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewTarget((prev) => ({ ...prev, [name]: value }))
     }
   }
+
+  // 处理下拉选择变化
+  const handleSelectChange = (name: string, value: string) => {
+    if (selectedTarget) {
+      setSelectedTarget(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewTarget((prev) => ({ ...prev, [name]: value }))
+    }
+  }
+
+  // 打开编辑对话框
+  const handleEditTarget = (target: Target) => {
+    setSelectedTarget(target);
+    setDialogOpen(true);
+  };
+
+  // 提交表单（添加或更新）
+  const handleSubmit = async () => {
+    try {
+      if (selectedTarget) {
+        // 更新现有客户
+        await put("targets", selectedTarget);
+        setTargets(prev => prev.map(item => item.id === selectedTarget.id ? selectedTarget : item));
+        setSelectedTarget(null);
+      } else {
+        // 添加新客户
+        const id = await add("targets", newTarget)
+
+        // 更新状态
+        setTargets([...targets, { ...newTarget, id: id as string | number }])
+
+        // 重置表单
+        setNewTarget({
+          name: "",
+          need: "",
+          stage: "商务谈判",
+          advantage: "",
+          disadvantage: "",
+          possibility: "高",
+          amount: 0, // 重置金额
+          date: new Date(),
+        })
+      }
+      setDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving target:", error)
+    }
+  }
+
+  // 关闭对话框并重置状态
+  const handleCloseDialog = () => {
+    setSelectedTarget(null);
+    setDialogOpen(false);
+  };
 
   // 添加删除功能
   const handleDeleteTarget = async (id: string | number) => {
@@ -247,16 +282,16 @@ export function TargetCustomersPage() {
               <SelectItem value="yearly">本年</SelectItem>
             </SelectContent>
           </Select>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="text-xs h-8 flex gap-1 px-2">
+              <Button size="sm" className="text-xs h-8 flex gap-1 px-2" onClick={() => setSelectedTarget(null)}>
                 <Plus className="h-3.5 w-3.5" />
                 添加客户
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle className="text-lg">添加客户</DialogTitle>
+                <DialogTitle className="text-lg">{selectedTarget ? "编辑客户" : "添加客户"}</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -266,7 +301,7 @@ export function TargetCustomersPage() {
                   <Input
                     id="name"
                     name="name"
-                    value={newTarget.name}
+                    value={selectedTarget ? selectedTarget.name : newTarget.name}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -278,7 +313,7 @@ export function TargetCustomersPage() {
                   <Textarea
                     id="need"
                     name="need"
-                    value={newTarget.need}
+                    value={selectedTarget ? selectedTarget.need : newTarget.need}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -287,7 +322,7 @@ export function TargetCustomersPage() {
                   <Label htmlFor="stage" className="text-right">
                     项目阶段
                   </Label>
-                  <Select value={newTarget.stage} onValueChange={(value) => handleSelectChange("stage", value)}>
+                  <Select value={selectedTarget ? selectedTarget.stage : newTarget.stage} onValueChange={(value) => handleSelectChange("stage", value)}>
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择项目阶段" />
                     </SelectTrigger>
@@ -306,7 +341,7 @@ export function TargetCustomersPage() {
                   <Input
                     id="advantage"
                     name="advantage"
-                    value={newTarget.advantage}
+                    value={selectedTarget ? selectedTarget.advantage : newTarget.advantage}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -318,7 +353,7 @@ export function TargetCustomersPage() {
                   <Input
                     id="disadvantage"
                     name="disadvantage"
-                    value={newTarget.disadvantage}
+                    value={selectedTarget ? selectedTarget.disadvantage : newTarget.disadvantage}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -327,10 +362,7 @@ export function TargetCustomersPage() {
                   <Label htmlFor="possibility" className="text-right">
                     可能性
                   </Label>
-                  <Select
-                    value={newTarget.possibility}
-                    onValueChange={(value) => handleSelectChange("possibility", value)}
-                  >
+                  <Select value={selectedTarget ? selectedTarget.possibility : newTarget.possibility} onValueChange={(value) => handleSelectChange("possibility", value)}>
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择可能性" />
                     </SelectTrigger>
@@ -341,36 +373,27 @@ export function TargetCustomersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* 添加金额输入框 */}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="amount" className="text-right">
-                    金额
+                    金额 (元)
                   </Label>
                   <Input
                     id="amount"
                     name="amount"
                     type="number"
-                    value={newTarget.amount}
-                    onChange={handleNumberInputChange}
+                    value={selectedTarget ? String(selectedTarget.amount || 0) : String(newTarget.amount || 0)}
+                    onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
-                    placeholder="请输入金额"
                   />
                 </div>
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" className="rounded-lg">
-                    取消
-                  </Button>
+                  <Button variant="outline" onClick={handleCloseDialog}>取消</Button>
                 </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    onClick={handleAddTarget}
-                    className="rounded-lg bg-gradient-to-r from-brand-purple to-brand-pink"
-                  >
-                    保存
-                  </Button>
-                </DialogClose>
+                <Button type="submit" onClick={handleSubmit}>
+                  {selectedTarget ? "更新" : "添加"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -394,51 +417,70 @@ export function TargetCustomersPage() {
               <TableHead className="py-3 w-[120px]">劣势</TableHead>
               <TableHead className="py-3 w-[80px]">可能性</TableHead>
               <TableHead className="py-3 text-right w-[100px]">金额</TableHead>
-              <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
+              <TableHead className="w-[100px] py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTargets.filter(target => 
-              target.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              target.need.toLowerCase().includes(searchTerm.toLowerCase())
-            ).map((target, index) => (
-              <TableRow
-                key={target.id}
-                className={cn(
-                  "group",
-                  index % 2 === 0 ? "bg-white" : "bg-gray-50",
-                  "hover:bg-muted/20 dark:hover:bg-muted/20 dark:bg-gray-800 dark:even:bg-gray-900",
-                )}
-              >
-                <TableCell className="font-medium">{target.id}</TableCell>
-                <TableCell className="font-medium">{target.name}</TableCell>
-                <TableCell className="max-w-[200px] truncate">{target.need}</TableCell>
-                <TableCell>
-                  <Badge className={getStageColor(target.stage)}>
-                    {target.stage}
-                  </Badge>
-                </TableCell>
-                <TableCell>{target.advantage}</TableCell>
-                <TableCell>{target.disadvantage}</TableCell>
-                <TableCell>
-                  <Badge className={getPossibilityColor(target.possibility)}>
-                    {target.possibility}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-medium text-right">{formatAmount(target.amount || 0)}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => target.id && handleDeleteTarget(target.id)}
-                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">删除</span>
-                  </Button>
+            {filteredTargets.length > 0 ? (
+              filteredTargets.filter(target => 
+                target.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                target.need.toLowerCase().includes(searchTerm.toLowerCase())
+              ).map((target, index) => (
+                <TableRow
+                  key={target.id}
+                  className={cn(
+                    "group",
+                    index % 2 === 0 ? "bg-white" : "bg-gray-50",
+                    "hover:bg-muted/20 dark:hover:bg-muted/20 dark:bg-gray-800 dark:even:bg-gray-900",
+                  )}
+                >
+                  <TableCell className="font-medium">{index + 1}</TableCell>
+                  <TableCell className="font-medium">{target.name}</TableCell>
+                  <TableCell className="max-w-[200px] truncate">{target.need}</TableCell>
+                  <TableCell>
+                    <Badge className={getStageColor(target.stage)}>
+                      {target.stage}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{target.advantage}</TableCell>
+                  <TableCell>{target.disadvantage}</TableCell>
+                  <TableCell>
+                    <Badge className={getPossibilityColor(target.possibility)}>
+                      {target.possibility}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-medium text-right">{formatAmount(target.amount || 0)}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditTarget(target)}
+                        className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity mr-1"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">编辑</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => target.id && handleDeleteTarget(target.id)}
+                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">删除</span>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-4">
+                  暂无数据
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </motion.div>

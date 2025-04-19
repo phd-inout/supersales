@@ -12,14 +12,15 @@ import {
   DialogTrigger,
   DialogFooter,
   DialogClose,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-// 在 import 部分添加 Trash2 图标
-import { CalendarIcon, Plus, Search, Trash2 } from "lucide-react"
+// 在 import 部分添加 Pencil 图标
+import { CalendarIcon, Plus, Search, Trash2, Pencil } from "lucide-react"
 import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -40,6 +41,10 @@ export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
+  // 添加选中的项目状态，用于编辑
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  // 添加对话框显示状态
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [newProject, setNewProject] = useState({
     name: "",
     type: "会议",
@@ -77,38 +82,80 @@ export function ProjectsPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setNewProject((prev) => ({ ...prev, [name]: value }))
+    if (selectedProject) {
+      setSelectedProject(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewProject((prev) => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    setNewProject((prev) => ({ ...prev, [name]: value }))
+    if (selectedProject) {
+      setSelectedProject(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewProject((prev) => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
-      setNewProject((prev) => ({ ...prev, date }))
+      if (selectedProject) {
+        setSelectedProject(prev => ({ ...prev!, date }))
+      } else {
+        setNewProject((prev) => ({ ...prev, date }))
+      }
     }
   }
 
-  const handleAddProject = async () => {
+  // 打开编辑对话框
+  const handleEditProject = (project: Project) => {
+    setSelectedProject({
+      ...project,
+      date: new Date(project.date)
+    })
+    setDialogOpen(true)
+  }
+
+  // 关闭对话框并重置状态
+  const handleCloseDialog = () => {
+    setSelectedProject(null)
+    setDialogOpen(false)
+  }
+
+  // 提交表单（添加或更新）
+  const handleSubmit = async () => {
     try {
-      // 添加到数据库
-      const { add } = await import("@/lib/db-service")
-      const id = await add("projects", newProject)
+      if (selectedProject) {
+        // 更新现有项目
+        const { put } = await import("@/lib/db-service")
+        await put("projects", selectedProject)
+        
+        // 更新状态
+        setProjects(prev => prev.map(item => 
+          item.id === selectedProject.id ? selectedProject : item
+        ))
+        
+        setSelectedProject(null)
+      } else {
+        // 添加到数据库
+        const { add } = await import("@/lib/db-service")
+        const id = await add("projects", newProject)
 
-      // 更新状态
-      const newId = typeof id === 'object' ? String(id) : id;
-      setProjects([...projects, { ...newProject, id: newId }])
+        // 更新状态
+        const newId = typeof id === 'object' ? String(id) : id;
+        setProjects([...projects, { ...newProject, id: newId }])
 
-      // 重置表单
-      setNewProject({
-        name: "",
-        type: "会议",
-        description: "",
-        date: new Date(),
-      })
+        // 重置表单
+        setNewProject({
+          name: "",
+          type: "会议",
+          description: "",
+          date: new Date(),
+        })
+      }
+      setDialogOpen(false)
     } catch (error) {
-      console.error("Error adding project:", error)
+      console.error("Error saving project:", error)
     }
   }
 
@@ -151,16 +198,19 @@ export function ProjectsPage() {
               onChange={handleSearch}
             />
           </div>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => setSelectedProject(null)}>
                 <Plus className="mr-2 h-4 w-4" />
                 添加事务
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>添加项目事务</DialogTitle>
+                <DialogTitle>{selectedProject ? "编辑项目事务" : "添加项目事务"}</DialogTitle>
+                <DialogDescription>
+                  {selectedProject ? "修改项目事务信息" : "添加新的项目事务"}
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -170,7 +220,7 @@ export function ProjectsPage() {
                   <Input
                     id="name"
                     name="name"
-                    value={newProject.name}
+                    value={selectedProject ? selectedProject.name : newProject.name}
                     onChange={handleInputChange}
                     className="col-span-3"
                   />
@@ -179,7 +229,10 @@ export function ProjectsPage() {
                   <Label htmlFor="type" className="text-right">
                     事务类型
                   </Label>
-                  <Select value={newProject.type} onValueChange={(value) => handleSelectChange("type", value)}>
+                  <Select 
+                    value={selectedProject ? selectedProject.type : newProject.type} 
+                    onValueChange={(value) => handleSelectChange("type", value)}
+                  >
                     <SelectTrigger className="col-span-3">
                       <SelectValue placeholder="选择事务类型" />
                     </SelectTrigger>
@@ -201,7 +254,7 @@ export function ProjectsPage() {
                   <Textarea
                     id="description"
                     name="description"
-                    value={newProject.description}
+                    value={selectedProject ? selectedProject.description : newProject.description}
                     onChange={handleInputChange}
                     className="col-span-3"
                   />
@@ -221,22 +274,31 @@ export function ProjectsPage() {
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newProject.date ? format(newProject.date, "PPP", { locale: zhCN }) : <span>选择日期</span>}
+                        {selectedProject 
+                          ? format(new Date(selectedProject.date), "PPP", { locale: zhCN }) 
+                          : newProject.date 
+                            ? format(newProject.date, "PPP", { locale: zhCN }) 
+                            : <span>选择日期</span>}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single" selected={newProject.date} onSelect={handleDateChange} initialFocus />
+                      <Calendar 
+                        mode="single" 
+                        selected={selectedProject ? new Date(selectedProject.date) : newProject.date} 
+                        onSelect={handleDateChange} 
+                        initialFocus 
+                      />
                     </PopoverContent>
                   </Popover>
                 </div>
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline">取消</Button>
+                  <Button variant="outline" onClick={handleCloseDialog}>取消</Button>
                 </DialogClose>
-                <DialogClose asChild>
-                  <Button onClick={handleAddProject}>保存</Button>
-                </DialogClose>
+                <Button onClick={handleSubmit}>
+                  {selectedProject ? "更新" : "保存"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -252,7 +314,7 @@ export function ProjectsPage() {
               <TableHead>事务类型</TableHead>
               <TableHead>事务描述</TableHead>
               <TableHead>日期</TableHead>
-              <TableHead className="w-[80px]">操作</TableHead>
+              <TableHead className="w-[120px] text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -262,17 +324,28 @@ export function ProjectsPage() {
                 <TableCell>{project.name}</TableCell>
                 <TableCell>{project.type}</TableCell>
                 <TableCell>{project.description}</TableCell>
-                <TableCell>{format(project.date, "yyyy-MM-dd")}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteProject(project.id)}
-                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">删除</span>
-                  </Button>
+                <TableCell>{format(new Date(project.date), "yyyy-MM-dd")}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end space-x-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditProject(project)}
+                      className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only">编辑</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteProject(project.id)}
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">删除</span>
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

@@ -76,6 +76,16 @@ export function GoalsPage() {
     payment: "bg-indigo-500"
   };
 
+  // 图标对应文本颜色
+  const goalTypeTextColors = {
+    leads: "text-blue-500",
+    visits: "text-green-500",
+    prospects: "text-purple-500",
+    contracts: "text-yellow-500",
+    profit: "text-red-500",
+    payment: "text-indigo-500"
+  };
+
   // 目标类型的中文名称
   const goalTypeNames = {
     leads: "线索",
@@ -362,457 +372,271 @@ export function GoalsPage() {
         </div>
       </motion.div>
 
-      {/* 全年目标总览 - 使用色块区分目标类型 */}
+      {/* 全年目标总览 - 现代化卡片设计 */}
       <motion.div
         className="flex flex-col mb-4"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
       >
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-3 border">
-          <h2 className="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-200">全年目标进度</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {Object.keys(goalTypeNames).map((type) => (
-              <div
-                key={type}
-                className="flex flex-col p-3 rounded-lg shadow-sm border"
-                style={{ borderLeftWidth: '4px', borderLeftColor: `var(--${type}-color, #4f46e5)` }}
-              >
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium text-sm">{goalTypeNames[type as keyof typeof goalTypeNames]}</span>
-                  <span className="text-xs font-bold">
-                    {calculateProgress(
-                      goalStats[type]?.actual || 0,
-                      goalStats[type]?.target || 0
-                    )}%
-                  </span>
-                </div>
+        <Card className="rounded-xl overflow-hidden border-0 shadow-md">
+          <CardHeader className="p-3 border-b bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+            <CardTitle className="text-base font-medium text-gray-800 dark:text-gray-200 flex items-center">
+              <span className="mr-2 h-1.5 w-1.5 rounded-full bg-brand-teal"></span>
+              全年目标概览
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-6 gap-3">
+              {Object.keys(goalTypeNames).map((type) => {
+                // 计算进度百分比
+                const progress = calculateProgress(
+                  goalStats[type]?.actual || 0, 
+                  goalStats[type]?.target || 0
+                );
                 
-                <div className="flex justify-between text-sm mb-1">
-                  <span>
-                    {type === 'contracts' || type === 'profit' || type === 'payment' 
-                      ? `¥${formatCurrency(goalStats[type]?.actual || 0)}` 
-                      : goalStats[type]?.actual || 0}
-                  </span>
-                  <span className="text-gray-500">
-                    目标: {type === 'contracts' || type === 'profit' || type === 'payment' 
-                      ? `¥${formatCurrency(goalStats[type]?.target || 0)}` 
-                      : goalStats[type]?.target || 0}
-                  </span>
-                </div>
+                // 是否为金额类型
+                const isMonetary = type === 'contracts' || type === 'profit' || type === 'payment';
                 
-                <Progress
-                  value={calculateProgress(
-                    goalStats[type]?.actual || 0,
-                    goalStats[type]?.target || 0
-                  )}
-                  className={`h-2 ${goalTypeColors[type as keyof typeof goalTypeColors]}`}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+                // 设置图标
+                const goalIcons = {
+                  leads: "👥",
+                  visits: "🤝",
+                  prospects: "🎯",
+                  contracts: "📝",
+                  profit: "💰",
+                  payment: "💸"
+                };
+                
+                // 背景样式
+                const bgStyles = {
+                  leads: "bg-gradient-to-br from-blue-50 to-white",
+                  visits: "bg-gradient-to-br from-green-50 to-white",
+                  prospects: "bg-gradient-to-br from-purple-50 to-white",
+                  contracts: "bg-gradient-to-br from-yellow-50 to-white",
+                  profit: "bg-gradient-to-br from-red-50 to-white",
+                  payment: "bg-gradient-to-br from-indigo-50 to-white"
+                };
+                
+                // 设定装饰元素颜色
+                const decorationColors = {
+                  leads: "border-blue-500",
+                  visits: "border-green-500",
+                  prospects: "border-purple-500",
+                  contracts: "border-yellow-500",
+                  profit: "border-red-500",
+                  payment: "border-indigo-500"
+                };
+                
+                return (
+                  <div
+                    key={type}
+                    className={`relative group p-3.5 rounded-xl border shadow-sm ${bgStyles[type as keyof typeof bgStyles]} hover:shadow-md transition-all duration-300 overflow-hidden`}
+                  >
+                    {/* 装饰元素 */}
+                    <div className={`absolute -right-2 -top-2 w-12 h-12 rounded-full border-4 ${decorationColors[type as keyof typeof decorationColors]} opacity-10`}></div>
+                    <div className={`absolute -left-3 -bottom-3 w-8 h-8 rounded-full border-4 ${decorationColors[type as keyof typeof decorationColors]} opacity-10`}></div>
+                    
+                    {/* 标题与图标 */}
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center">
+                        <span className="mr-2 text-lg">{goalIcons[type as keyof typeof goalIcons]}</span>
+                        <span className={`text-xs font-medium ${goalTypeTextColors[type as keyof typeof goalTypeTextColors]}`}>
+                          {goalTypeNames[type as keyof typeof goalTypeNames]}
+                        </span>
+                      </div>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        progress >= 75 ? "bg-green-100 text-green-700" : 
+                        progress >= 50 ? "bg-yellow-100 text-yellow-700" : 
+                        "bg-red-100 text-red-700"
+                      }`}>
+                        {progress}%
+                      </span>
+                    </div>
+                    
+                    {/* 数值显示 */}
+                    <div className="mt-2">
+                      <div className="text-xl font-bold text-gray-800 dark:text-white">
+                        {isMonetary ? `¥${formatCurrency(goalStats[type]?.actual || 0)}` : goalStats[type]?.actual || 0}
+                      </div>
+                      <div className="flex justify-between items-center mt-1">
+                        <div className="text-xs text-gray-500">
+                          <span className="opacity-70">目标:</span> {isMonetary ? `¥${formatCurrency(goalStats[type]?.target || 0)}` : goalStats[type]?.target || 0}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* 进度条 */}
+                    <div className="mt-3 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${
+                          progress >= 75 ? "bg-green-500" : 
+                          progress >= 50 ? "bg-yellow-500" : 
+                          "bg-red-500"
+                        }`}
+                        style={{ width: `${progress}%` }}
+                      ></div>
+                    </div>
+                    
+                    {/* 进度指示器 - 只在悬停时显示 */}
+                    <div className="absolute right-3 bottom-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <svg className="w-6 h-6" viewBox="0 0 36 36">
+                        <circle 
+                          cx="18" 
+                          cy="18" 
+                          r="16" 
+                          fill="none" 
+                          stroke="#e5e7eb" 
+                          strokeWidth="3" 
+                        />
+                        <circle 
+                          cx="18" 
+                          cy="18" 
+                          r="16" 
+                          fill="none" 
+                          stroke={
+                            progress >= 75 ? "#10b981" : 
+                            progress >= 50 ? "#f59e0b" : 
+                            "#ef4444"
+                          }
+                          strokeWidth="3" 
+                          strokeDasharray="100" 
+                          strokeDashoffset={100 - progress} 
+                          strokeLinecap="round"
+                          transform="rotate(-90 18 18)"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
-      {/* 季度选项卡 */}
-      <Tabs value={activeQuarter} onValueChange={setActiveQuarter} className="w-full flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-4 mb-3">
-          <TabsTrigger value="Q1">Q1</TabsTrigger>
-          <TabsTrigger value="Q2">Q2</TabsTrigger>
-          <TabsTrigger value="Q3">Q3</TabsTrigger>
-          <TabsTrigger value="Q4">Q4</TabsTrigger>
-        </TabsList>
-
-        {/* 季度内容 - 使用flex-1确保内容区域填充剩余空间 */}
-        {["Q1", "Q2", "Q3", "Q4"].map((quarter) => (
-          <TabsContent key={quarter} value={quarter} className="flex-1 flex flex-col">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-full">
-              {/* 左侧季度详情 - 更紧凑的卡片设计 */}
-              <div className="md:col-span-1 grid grid-cols-2 gap-3 auto-rows-min h-fit">
-                {hasData ? (
-                  <>
-                    <Card className="overflow-hidden col-span-1">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2">
-                        <CardTitle className="text-sm">线索</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2">
-                        <div className="text-xl font-bold">{currentQuarterData.leads?.actual || 0}</div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">目标: {currentQuarterData.leads?.target || 0}</span>
-                          <span className="text-xs font-medium">
-                            {calculateProgress(
-                              currentQuarterData.leads?.actual || 0,
-                              currentQuarterData.leads?.target || 0,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <Progress
-                          value={calculateProgress(
-                            currentQuarterData.leads?.actual || 0,
-                            currentQuarterData.leads?.target || 0,
-                          )}
-                          className="h-1 mt-1"
-                        />
-                      </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden col-span-1">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2">
-                        <CardTitle className="text-sm">拜访</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2">
-                        <div className="text-xl font-bold">{currentQuarterData.visits?.actual || 0}</div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">目标: {currentQuarterData.visits?.target || 0}</span>
-                          <span className="text-xs font-medium">
-                            {calculateProgress(
-                              currentQuarterData.visits?.actual || 0,
-                              currentQuarterData.visits?.target || 0,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <Progress
-                          value={calculateProgress(
-                            currentQuarterData.visits?.actual || 0,
-                            currentQuarterData.visits?.target || 0,
-                          )}
-                          className="h-1 mt-1"
-                        />
-                      </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden col-span-1">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2">
-                        <CardTitle className="text-sm">潜在客户</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2">
-                        <div className="text-xl font-bold">{currentQuarterData.prospects?.actual || 0}</div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">
-                            目标: {currentQuarterData.prospects?.target || 0}
-                          </span>
-                          <span className="text-xs font-medium">
-                            {calculateProgress(
-                              currentQuarterData.prospects?.actual || 0,
-                              currentQuarterData.prospects?.target || 0,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <Progress
-                          value={calculateProgress(
-                            currentQuarterData.prospects?.actual || 0,
-                            currentQuarterData.prospects?.target || 0,
-                          )}
-                          className="h-1 mt-1"
-                        />
-                      </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden col-span-1">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2">
-                        <CardTitle className="text-sm">合同</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2">
-                        <div className="text-xl font-bold">
-                          ¥{formatCurrency(currentQuarterData.contracts?.actual || 0)}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">
-                            目标: ¥{formatCurrency(currentQuarterData.contracts?.target || 0)}
-                          </span>
-                          <span className="text-xs font-medium">
-                            {calculateProgress(
-                              currentQuarterData.contracts?.actual || 0,
-                              currentQuarterData.contracts?.target || 0,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <Progress
-                          value={calculateProgress(
-                            currentQuarterData.contracts?.actual || 0,
-                            currentQuarterData.contracts?.target || 0,
-                          )}
-                          className="h-1 mt-1"
-                        />
-                      </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden col-span-1">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2">
-                        <div className="flex justify-between">
-                          <CardTitle className="text-sm">利润</CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-2">
-                        <div className="text-xl font-bold">
-                          ¥{formatCurrency(currentQuarterData.profit?.actual || 0)}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">
-                            目标: ¥{formatCurrency(currentQuarterData.profit?.target || 0)}
-                          </span>
-                          <span className="text-xs font-medium">
-                            {calculateProgress(
-                              currentQuarterData.profit?.actual || 0,
-                              currentQuarterData.profit?.target || 0,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <Progress
-                          value={calculateProgress(
-                            currentQuarterData.profit?.actual || 0,
-                            currentQuarterData.profit?.target || 0,
-                          )}
-                          className="h-1 mt-1"
-                        />
-                      </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden col-span-1">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2">
-                        <CardTitle className="text-sm">回款</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-2">
-                        <div className="text-xl font-bold">
-                          ¥{formatCurrency(currentQuarterData.payment?.actual || 0)}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">
-                            目标: ¥{formatCurrency(currentQuarterData.payment?.target || 0)}
-                          </span>
-                          <span className="text-xs font-medium">
-                            {calculateProgress(
-                              currentQuarterData.payment?.actual || 0,
-                              currentQuarterData.payment?.target || 0,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <Progress
-                          value={calculateProgress(
-                            currentQuarterData.payment?.actual || 0,
-                            currentQuarterData.payment?.target || 0,
-                          )}
-                          className="h-1 mt-1"
-                        />
-                      </CardContent>
-                    </Card>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-32 bg-white dark:bg-gray-800 rounded-xl border p-4 col-span-2">
-                    <p className="text-gray-500 dark:text-gray-400 mb-2 text-sm">该季度暂无目标数据</p>
-                    <Button className="bg-gradient-to-r from-brand-teal to-brand-green">
-                      <Plus className="mr-1 h-3 w-3" />
-                      添加目标
-                    </Button>
+      {/* 四季度并列显示 - 优化空间和文字大小 */}
+      <motion.div
+        className="flex-1"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2 }}
+      >
+        <Card className="rounded-xl overflow-hidden border-0 shadow-md">
+          <CardHeader className="py-2 px-3 border-b bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+            <CardTitle className="text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center">
+              <span className="mr-2 h-1.5 w-1.5 rounded-full bg-brand-teal"></span>
+              季度目标详情
+            </CardTitle>
+          </CardHeader>
+          <div className="grid grid-cols-4 divide-x">
+            {["Q1", "Q2", "Q3", "Q4"].map((quarter, quarterIndex) => {
+              const quarterData = goalsByQuarters[quarter] || {};
+              const hasQuarterData = Object.keys(quarterData).length > 0;
+              
+              // 季度颜色
+              const quarterColors = [
+                "after:bg-blue-500",
+                "after:bg-green-500", 
+                "after:bg-orange-500",
+                "after:bg-purple-500"
+              ];
+              
+              // 季度名称
+              const quarterNames = ["第一季度", "第二季度", "第三季度", "第四季度"];
+              
+              return (
+                <div key={quarter} className="flex flex-col">
+                  <div className={`py-1.5 px-3 bg-gray-50 dark:bg-gray-800 border-b flex items-center justify-center relative after:absolute after:left-0 after:top-0 after:h-full after:w-1 ${quarterColors[quarterIndex]}`}>
+                    <h3 className="text-sm font-medium text-center">{quarterNames[quarterIndex]}</h3>
                   </div>
-                )}
-              </div>
-
-              {/* 右侧季度详情 */}
-              <div className="md:col-span-2 space-y-3 h-full flex flex-col">
-                {hasData ? (
-                  <>
-                    {/* 季度进度概览 */}
-                    <Card className="overflow-hidden flex-1">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-3">
-                        <CardTitle className="text-sm">{quarter} 进度概览</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-3">
-                        <div className="space-y-3">
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-xs font-medium">线索</span>
-                              <span className="text-xs font-medium">
-                                {calculateProgress(
-                                  currentQuarterData.leads?.actual || 0,
-                                  currentQuarterData.leads?.target || 0,
-                                )}
-                                %
-                              </span>
-                            </div>
-                            <Progress
-                              value={calculateProgress(
-                                currentQuarterData.leads?.actual || 0,
-                                currentQuarterData.leads?.target || 0,
-                              )}
-                              className="h-1.5"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>当前: {currentQuarterData.leads?.actual || 0}</span>
-                              <span>目标: {currentQuarterData.leads?.target || 0}</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-xs font-medium">拜访</span>
-                              <span className="text-xs font-medium">
-                                {calculateProgress(
-                                  currentQuarterData.visits?.actual || 0,
-                                  currentQuarterData.visits?.target || 0,
-                                )}
-                                %
-                              </span>
-                            </div>
-                            <Progress
-                              value={calculateProgress(
-                                currentQuarterData.visits?.actual || 0,
-                                currentQuarterData.visits?.target || 0,
-                              )}
-                              className="h-1.5"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>当前: {currentQuarterData.visits?.actual || 0}</span>
-                              <span>目标: {currentQuarterData.visits?.target || 0}</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-xs font-medium">潜在客户</span>
-                              <span className="text-xs font-medium">
-                                {calculateProgress(
-                                  currentQuarterData.prospects?.actual || 0,
-                                  currentQuarterData.prospects?.target || 0,
-                                )}
-                                %
-                              </span>
-                            </div>
-                            <Progress
-                              value={calculateProgress(
-                                currentQuarterData.prospects?.actual || 0,
-                                currentQuarterData.prospects?.target || 0,
-                              )}
-                              className="h-1.5"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>当前: {currentQuarterData.prospects?.actual || 0}</span>
-                              <span>目标: {currentQuarterData.prospects?.target || 0}</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-xs font-medium">合同金额</span>
-                              <span className="text-xs font-medium">
-                                {calculateProgress(
-                                  currentQuarterData.contracts?.actual || 0,
-                                  currentQuarterData.contracts?.target || 0,
-                                )}
-                                %
-                              </span>
-                            </div>
-                            <Progress
-                              value={calculateProgress(
-                                currentQuarterData.contracts?.actual || 0,
-                                currentQuarterData.contracts?.target || 0,
-                              )}
-                              className="h-1.5"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>当前: ¥{formatCurrency(currentQuarterData.contracts?.actual || 0)}</span>
-                              <span>目标: ¥{formatCurrency(currentQuarterData.contracts?.target || 0)}</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-xs font-medium">利润</span>
-                              <span className="text-xs font-medium">
-                                {calculateProgress(
-                                  currentQuarterData.profit?.actual || 0,
-                                  currentQuarterData.profit?.target || 0,
-                                )}
-                                %
-                              </span>
-                            </div>
-                            <Progress
-                              value={calculateProgress(
-                                currentQuarterData.profit?.actual || 0,
-                                currentQuarterData.profit?.target || 0,
-                              )}
-                              className="h-1.5"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>当前: ¥{formatCurrency(currentQuarterData.profit?.actual || 0)}</span>
-                              <span>目标: ¥{formatCurrency(currentQuarterData.profit?.target || 0)}</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-xs font-medium">回款</span>
-                              <span className="text-xs font-medium">
-                                {calculateProgress(
-                                  currentQuarterData.payment?.actual || 0,
-                                  currentQuarterData.payment?.target || 0,
-                                )}
-                                %
-                              </span>
-                            </div>
-                            <Progress
-                              value={calculateProgress(
-                                currentQuarterData.payment?.actual || 0,
-                                currentQuarterData.payment?.target || 0,
-                              )}
-                              className="h-1.5"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>当前: ¥{formatCurrency(currentQuarterData.payment?.actual || 0)}</span>
-                              <span>目标: ¥{formatCurrency(currentQuarterData.payment?.target || 0)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* 合同进度 - 从数据库获取数据 */}
-                    <Card className="overflow-hidden">
-                      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-3">
-                        <CardTitle className="text-sm">{quarter} 合同进度</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        {contracts.length > 0 ? (
-                          <div className="grid grid-cols-2 gap-0">
-                            {contracts.map((contract, index) => (
-                              <div
-                                key={contract.id}
-                                className={`p-2 ${index % 2 === 0 && index < contracts.length - 1 ? "border-r" : ""} ${index < contracts.length - 2 ? "border-b" : ""}`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <div>
-                                    <div className="text-xs font-medium">¥{formatCurrency(contract.amount)}</div>
-                                    <div className="text-xs text-gray-500">{Math.round(Math.random() * 100)}% 完成</div>
-                                  </div>
-                                  <div className="text-xs">{contract.customer}</div>
-                                </div>
+                  
+                  {hasQuarterData ? (
+                    <div className="divide-y">
+                      {Object.keys(goalTypeNames).map((type) => {
+                        const progress = calculateProgress(
+                          quarterData[type]?.actual || 0,
+                          quarterData[type]?.target || 0
+                        );
+                        
+                        const isMonetary = type === 'contracts' || type === 'profit' || type === 'payment';
+                        
+                        // 获取图标
+                        const goalIcons = {
+                          leads: "👥",
+                          visits: "🤝",
+                          prospects: "🎯",
+                          contracts: "📝",
+                          profit: "💰",
+                          payment: "💸"
+                        };
+                        
+                        return (
+                          <div 
+                            key={`${quarter}-${type}`} 
+                            className="py-2 px-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150"
+                          >
+                            <div className="flex justify-between items-center mb-1">
+                              <div className="flex items-center">
+                                <span className="mr-1 text-sm">{goalIcons[type as keyof typeof goalIcons]}</span>
+                                <span className={`text-sm font-medium ${goalTypeTextColors[type as keyof typeof goalTypeTextColors]}`}>
+                                  {goalTypeNames[type as keyof typeof goalTypeNames]}
+                                </span>
                               </div>
-                            ))}
+                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                                progress >= 75 ? "bg-green-100 text-green-700" : 
+                                progress >= 50 ? "bg-amber-100 text-amber-700" : 
+                                "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                              }`}>
+                                {progress}%
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-baseline justify-between">
+                              <div className={`text-base font-bold ${
+                                progress >= 75 ? "text-green-600" : 
+                                progress >= 50 ? "text-amber-600" : 
+                                "text-gray-700 dark:text-gray-300"
+                              }`}>
+                                {isMonetary ? `¥${formatCurrency(quarterData[type]?.actual || 0)}` : quarterData[type]?.actual || 0}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                /{isMonetary ? `¥${formatCurrency(quarterData[type]?.target || 0)}` : quarterData[type]?.target || 0}
+                              </div>
+                            </div>
+                            
+                            {/* 极简进度条 */}
+                            <div className="w-full h-1 bg-gray-100 dark:bg-gray-700 rounded-full mt-1.5 overflow-hidden">
+                              <div
+                                className={`h-full ${
+                                  progress >= 75 ? "bg-green-500" : 
+                                  progress >= 50 ? "bg-yellow-500" : 
+                                  "bg-gray-400"
+                                }`}
+                                style={{ width: `${progress}%` }}
+                              ></div>
+                            </div>
                           </div>
-                        ) : (
-                          <div className="p-4 text-center">
-                            <p className="text-sm text-gray-500">该季度暂无合同数据</p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full bg-white dark:bg-gray-800 rounded-xl border p-4">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">该季度暂无匹配的商机</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center py-3 px-2">
+                      <div className="text-center">
+                        <p className="text-gray-400 text-xs mb-1.5">暂无目标数据</p>
+                        <Button size="sm" variant="outline" className="text-xs px-2 py-0.5 h-auto">
+                          <Plus className="mr-1 h-3 w-3" />
+                          添加
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </motion.div>
     </div>
   )
 }

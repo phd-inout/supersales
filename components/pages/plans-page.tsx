@@ -13,12 +13,13 @@ import {
   DialogTrigger,
   DialogFooter,
   DialogClose,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Plus, Search, ChevronLeft, ChevronRight, Filter, ArrowUpDown, Trash2 } from "lucide-react"
+import { CalendarIcon, Plus, Search, ChevronLeft, ChevronRight, Filter, ArrowUpDown, Trash2, Pencil } from "lucide-react"
 import { format, addWeeks, subWeeks } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -73,6 +74,10 @@ export function PlansPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [availableWeeks, setAvailableWeeks] = useState<WeekData[]>([])
   const [showWeekSelector, setShowWeekSelector] = useState(false)
+  // 添加选中的计划状态，用于编辑
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+  // 添加对话框显示状态
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [newPlan, setNewPlan] = useState({
     task: "",
     customer: "",
@@ -148,11 +153,28 @@ export function PlansPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setNewPlan((prev) => ({ ...prev, [name]: value }))
+    if (selectedPlan) {
+      setSelectedPlan(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewPlan((prev) => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    setNewPlan((prev) => ({ ...prev, [name]: value }))
+    if (selectedPlan) {
+      setSelectedPlan(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewPlan((prev) => ({ ...prev, [name]: value }))
+    }
+  }
+
+  // 处理复选框状态变化
+  const handleCheckChange = (name: string, checked: boolean) => {
+    if (selectedPlan) {
+      setSelectedPlan(prev => ({ ...prev!, [name]: checked }))
+    } else {
+      setNewPlan((prev) => ({ ...prev, [name]: checked }))
+    }
   }
 
   const handleDateChange = (date: Date | undefined) => {
@@ -160,49 +182,88 @@ export function PlansPage() {
     const week = getWeekNumber(date)
     const quarter = date.getMonth() < 3 ? "Q1" : date.getMonth() < 6 ? "Q2" : date.getMonth() < 9 ? "Q3" : "Q4"
 
-    setNewPlan((prev) => ({
-      ...prev,
-      date,
-      week,
-      year: date.getFullYear(),
-      quarter,
-    }))
+    if (selectedPlan) {
+      setSelectedPlan(prev => ({
+        ...prev!,
+        date,
+        week,
+        year: date.getFullYear(),
+        quarter,
+      }))
+    } else {
+      setNewPlan((prev) => ({
+        ...prev,
+        date,
+        week,
+        year: date.getFullYear(),
+        quarter,
+      }))
+    }
   }
 
-  const handleAddPlan = async () => {
+  // 打开编辑对话框
+  const handleEditPlan = (plan: Plan) => {
+    setSelectedPlan(plan)
+    setDialogOpen(true)
+  }
+
+  // 提交表单（添加或更新）
+  const handleSubmit = async () => {
     try {
-      // 确保plan有type字段
-      const planToAdd = { ...newPlan };
-      if (!planToAdd.type || planToAdd.type === "") {
-        planToAdd.type = "其他";
+      if (selectedPlan) {
+        // 更新现有计划
+        await put("plans", selectedPlan)
+        setPlans(prev => prev.map(item => item.id === selectedPlan.id ? selectedPlan : item))
+        setSelectedPlan(null)
+      } else {
+        // 确保plan有type字段
+        const planToAdd = { ...newPlan };
+        if (!planToAdd.type || planToAdd.type === "") {
+          planToAdd.type = "其他";
+        }
+        
+        // 添加到数据库
+        await add("plans", planToAdd)
+
+        // 如果添加的计划是当前选中的周，则刷新计划列表
+        if (newPlan.year === selectedYear && newPlan.week === selectedWeek) {
+          await fetchPlansForWeek(selectedYear, selectedWeek)
+        }
+
+        // 更新可用的周
+        const weeks = await getAllWeeks("plans")
+        setAvailableWeeks(weeks)
+
+        // 重置表单
+        setNewPlan({
+          task: "",
+          customer: "",
+          date: new Date(),
+          quarter: "",
+          week: getWeekNumber(new Date()),
+          year: new Date().getFullYear(),
+          completed: false,
+          type: "其他",
+        })
       }
-      
-      // 添加到数据库
-      await add("plans", planToAdd)
-
-      // 如果添加的计划是当前选中的周，则刷新计划列表
-      if (newPlan.year === selectedYear && newPlan.week === selectedWeek) {
-        await fetchPlansForWeek(selectedYear, selectedWeek)
-      }
-
-      // 更新可用的周
-      const weeks = await getAllWeeks("plans")
-      setAvailableWeeks(weeks)
-
-      // 重置表单
-      setNewPlan({
-        task: "",
-        customer: "",
-        date: new Date(),
-        quarter: "",
-        week: getWeekNumber(new Date()),
-        year: new Date().getFullYear(),
-        completed: false,
-        type: "其他", // 保持默认类型
-      })
+      setDialogOpen(false)
     } catch (error) {
-      console.error("Error adding plan:", error)
+      console.error("Error saving plan:", error)
     }
+  }
+
+  // 关闭对话框并重置状态
+  const handleCloseDialog = () => {
+    setSelectedPlan(null)
+    setDialogOpen(false)
+  }
+
+  const getQuarter = (date: Date) => {
+    const month = date.getMonth()
+    if (month < 3) return "Q1"
+    if (month < 6) return "Q2"
+    if (month < 9) return "Q3"
+    return "Q4"
   }
 
   const handleDeletePlan = async (id: number) => {
@@ -276,6 +337,21 @@ export function PlansPage() {
   }
 
   const { startDate, endDate } = getWeekRange(selectedYear, selectedWeek)
+  
+  const getPlanTypeColor = (type: string) => {
+    switch (type) {
+      case "电话":
+        return "bg-blue-100 text-blue-800"
+      case "拜访":
+        return "bg-green-100 text-green-800"
+      case "会议":
+        return "bg-purple-100 text-purple-800"
+      case "培训":
+        return "bg-amber-100 text-amber-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
 
   if (loading) {
     return (
@@ -310,11 +386,12 @@ export function PlansPage() {
           <Button variant="outline" size="sm" className="rounded-lg h-9">
             <Filter className="h-4 w-4" />
           </Button>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button
                 size="sm"
                 className="rounded-lg bg-gradient-to-r from-brand-pink to-brand-purple hover:from-brand-pink/90 hover:to-brand-purple/90 transition-all duration-300 h-9"
+                onClick={() => setSelectedPlan(null)}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 添加计划
@@ -322,7 +399,10 @@ export function PlansPage() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] rounded-xl">
               <DialogHeader>
-                <DialogTitle className="text-lg">添加新计划</DialogTitle>
+                <DialogTitle className="text-lg">{selectedPlan ? "编辑计划" : "添加新计划"}</DialogTitle>
+                <DialogDescription>
+                  在这里{selectedPlan ? "编辑" : "添加"}您的工作计划和任务。
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -332,7 +412,7 @@ export function PlansPage() {
                   <Input
                     id="task"
                     name="task"
-                    value={newPlan.task}
+                    value={selectedPlan ? selectedPlan.task : newPlan.task}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -341,7 +421,7 @@ export function PlansPage() {
                   <Label htmlFor="type" className="text-right text-sm">
                     计划类型
                   </Label>
-                  <Select value={newPlan.type} onValueChange={(value) => handleSelectChange("type", value)}>
+                  <Select value={selectedPlan ? selectedPlan.type : newPlan.type} onValueChange={(value) => handleSelectChange("type", value)}>
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择类型" />
                     </SelectTrigger>
@@ -358,7 +438,7 @@ export function PlansPage() {
                   <Label htmlFor="customer" className="text-right text-sm">
                     关联客户
                   </Label>
-                  <Select value={newPlan.customer} onValueChange={(value) => handleSelectChange("customer", value)}>
+                  <Select value={selectedPlan ? selectedPlan.customer : newPlan.customer} onValueChange={(value) => handleSelectChange("customer", value)}>
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择客户" />
                     </SelectTrigger>
@@ -386,29 +466,50 @@ export function PlansPage() {
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newPlan.date ? format(newPlan.date, "PPP", { locale: zhCN }) : <span>选择日期</span>}
+                        {selectedPlan && selectedPlan.date 
+                          ? format(new Date(selectedPlan.date), "PPP", { locale: zhCN }) 
+                          : newPlan.date 
+                            ? format(newPlan.date, "PPP", { locale: zhCN }) 
+                            : <span>选择日期</span>}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single" selected={newPlan.date} onSelect={handleDateChange} initialFocus />
+                      <Calendar 
+                        mode="single" 
+                        selected={selectedPlan && selectedPlan.date ? new Date(selectedPlan.date) : newPlan.date} 
+                        onSelect={handleDateChange} 
+                        initialFocus 
+                      />
                     </PopoverContent>
                   </Popover>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="completed" className="text-right text-sm">
+                    完成状态
+                  </Label>
+                  <div className="col-span-3 flex items-center">
+                    <Checkbox 
+                      id="completed" 
+                      checked={selectedPlan ? selectedPlan.completed : newPlan.completed} 
+                      onCheckedChange={(checked) => handleCheckChange("completed", checked as boolean)}
+                      className="mr-2" 
+                    />
+                    <Label htmlFor="completed" className="text-sm font-normal cursor-pointer">标记为已完成</Label>
+                  </div>
                 </div>
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" className="rounded-lg">
+                  <Button variant="outline" className="rounded-lg" onClick={handleCloseDialog}>
                     取消
                   </Button>
                 </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    onClick={handleAddPlan}
-                    className="rounded-lg bg-gradient-to-r from-brand-pink to-brand-purple"
-                  >
-                    保存
-                  </Button>
-                </DialogClose>
+                <Button
+                  onClick={handleSubmit}
+                  className="rounded-lg bg-gradient-to-r from-brand-pink to-brand-purple"
+                >
+                  {selectedPlan ? "更新" : "保存"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -505,7 +606,7 @@ export function PlansPage() {
               <TableHead className="py-3">类型</TableHead>
               <TableHead className="py-3">关联客户</TableHead>
               <TableHead className="py-3">日期</TableHead>
-              <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
+              <TableHead className="w-[100px] py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -533,134 +634,53 @@ export function PlansPage() {
                   >
                     {plan.task}
                   </TableCell>
-                  <TableCell className="py-1.5 text-sm">{plan.type || "其他"}</TableCell>
+                  <TableCell className="py-1.5 text-sm">
+                    <Badge className={cn(getPlanTypeColor(plan.type))}>
+                      {plan.type || "其他"}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="py-1.5 text-sm">{plan.customer}</TableCell>
                   <TableCell className="py-1.5 text-sm">{format(new Date(plan.date), "yyyy-MM-dd")}</TableCell>
                   <TableCell className="py-1.5 text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeletePlan(plan.id)}
-                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">删除</span>
-                    </Button>
+                    <div className="flex justify-end space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditPlan(plan)}
+                        className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">编辑</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeletePlan(plan.id)}
+                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">删除</span>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   <div className="flex flex-col items-center justify-center">
                     <p className="text-muted-foreground mb-2 text-sm">该周暂无计划</p>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="rounded-lg">
-                          <Plus className="mr-1 h-3 w-3" />
-                          添加计划
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[500px] rounded-xl">
-                        <DialogHeader>
-                          <DialogTitle>添加新计划</DialogTitle>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="task" className="text-right">
-                              计划事项
-                            </Label>
-                            <Input
-                              id="task"
-                              name="task"
-                              value={newPlan.task}
-                              onChange={handleInputChange}
-                              className="col-span-3 rounded-lg"
-                            />
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="type" className="text-right">
-                              计划类型
-                            </Label>
-                            <Select value={newPlan.type} onValueChange={(value) => handleSelectChange("type", value)}>
-                              <SelectTrigger className="col-span-3 rounded-lg">
-                                <SelectValue placeholder="选择类型" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="电话">电话联系</SelectItem>
-                                <SelectItem value="拜访">客户拜访</SelectItem>
-                                <SelectItem value="会议">内部会议</SelectItem>
-                                <SelectItem value="培训">培训活动</SelectItem>
-                                <SelectItem value="其他">其他事项</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="customer" className="text-right">
-                              关联客户
-                            </Label>
-                            <Select
-                              value={newPlan.customer}
-                              onValueChange={(value) => handleSelectChange("customer", value)}
-                            >
-                              <SelectTrigger className="col-span-3 rounded-lg">
-                                <SelectValue placeholder="选择客户" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {customers.map((customer) => (
-                                  <SelectItem key={customer} value={customer}>
-                                    {customer}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="date" className="text-right">
-                              日期
-                            </Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  id="date"
-                                  variant="outline"
-                                  className={cn(
-                                    "col-span-3 justify-start text-left font-normal rounded-lg",
-                                    !newPlan.date && "text-muted-foreground",
-                                  )}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {newPlan.date ? format(newPlan.date, "PPP", { locale: zhCN }) : <span>选择日期</span>}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={newPlan.date}
-                                  onSelect={handleDateChange}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <DialogClose asChild>
-                            <Button variant="outline" className="rounded-lg">
-                              取消
-                            </Button>
-                          </DialogClose>
-                          <DialogClose asChild>
-                            <Button
-                              onClick={handleAddPlan}
-                              className="rounded-lg bg-gradient-to-r from-brand-pink to-brand-purple"
-                            >
-                              保存
-                            </Button>
-                          </DialogClose>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                    <Button
+                      size="sm"
+                      className="rounded-lg"
+                      onClick={() => {
+                        setSelectedPlan(null);
+                        setDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      添加计划
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>

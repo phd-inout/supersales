@@ -62,7 +62,7 @@ export function Sidebar({ activePage, setActivePage }: SidebarProps) {
     { id: "targets", label: "客户", icon: UserCheck, color: "text-brand-purple" },
     { id: "plans", label: "计划", icon: Calendar, color: "text-brand-pink" },
     { id: "goals", label: "目标", icon: Target, color: "text-brand-teal" },
-    { id: "projects", label: "项目事务", icon: Briefcase, color: "text-brand-green" },
+    { id: "projects", label: "事务", icon: Briefcase, color: "text-brand-green" },
     { id: "reports", label: "数据报告", icon: BarChart3, color: "text-brand-amber" },
     { id: "database", label: "数据库管理", icon: Database, color: "text-brand-red" },
   ]

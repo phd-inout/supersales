@@ -548,17 +548,17 @@ export function ReportsPage() {
               </div>
             </CardHeader>
             <CardContent className="p-2">
-              <div className="text-xl font-bold">{performanceResult.grade}</div>
-              <p className="text-xs text-muted-foreground mt-0.5">得分: {performanceResult.score}分</p>
+              <div className="flex items-center gap-2">
+                <div className="text-xl font-bold">{performanceResult.grade}</div>
+                <p className="text-xs text-muted-foreground">得分: {performanceResult.score}分</p>
+              </div>
               <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-brand-red rounded-full"
                   style={{ width: `${performanceResult.score}%` }}
                 ></div>
               </div>
-              <div className="mt-2">
-                <p className="text-xs text-muted-foreground">基于目标完成率和权重计算</p>
-              </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5 truncate">基于目标完成率和权重计算</p>
             </CardContent>
           </Card>
         </motion.div>

@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Filter, ArrowUpDown, MoreHorizontal, Trash2 } from "lucide-react"
+import { Plus, Search, Filter, ArrowUpDown, MoreHorizontal, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import {
   DropdownMenu,
@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getAll, add, remove, initSampleData } from "@/lib/db-service"
+import { getAll, add, remove, put, initSampleData } from "@/lib/db-service"
 
 interface Lead {
   id?: string | number;
@@ -47,6 +47,8 @@ export function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
+  // 添加选中的商机状态，用于编辑
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   // 在newLead初始值中添加amount
   const [newLead, setNewLead] = useState<Omit<Lead, 'id'>>({
     name: "",
@@ -59,6 +61,8 @@ export function LeadsPage() {
     quarter: getQuarter(new Date()),
     amount: 0,
   });
+  // 添加对话框显示状态
+  const [dialogOpen, setDialogOpen] = useState(false);
   
  
 
@@ -92,58 +96,76 @@ export function LeadsPage() {
     return "Q4"
   }
 
-  const filteredLeads = useMemo(() => {
+  // 根据时间段筛选商机
+  const filterLeadsByPeriod = (leads: Lead[], period: string) => {
+    const now = new Date()
+    const currentWeek = getWeekNumber(now)
+    const currentMonth = now.getMonth()
+    const currentQuarter = Math.floor(currentMonth / 3)
+    const currentYear = now.getFullYear()
 
-    const now = new Date();
-    return leads.filter(lead => {
-      const leadDate = new Date(lead.date);
-      if (!leadDate) return false;
-      
-      const matchesSearch = 
-        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.need.toLowerCase().includes(searchTerm.toLowerCase());
-
-      if (!matchesSearch) return false;
+    return leads.filter((lead) => {
+      if (!lead.date) return false
+      const leadDate = new Date(lead.date)
+      const leadWeek = getWeekNumber(leadDate)
+      const leadMonth = leadDate.getMonth()
+      const leadQuarter = Math.floor(leadMonth / 3)
+      const leadYear = leadDate.getFullYear()
 
       switch (period) {
         case "weekly":
-          return getWeekNumber(leadDate) === getWeekNumber(now) && 
-                 leadDate.getFullYear() === now.getFullYear();
+          return leadWeek === currentWeek && leadYear === currentYear
         case "monthly":
-          return leadDate.getMonth() === now.getMonth() && 
-                 leadDate.getFullYear() === now.getFullYear();
+          return leadMonth === currentMonth && leadYear === currentYear
         case "quarterly":
-          return getQuarter(leadDate) === getQuarter(now) && 
-                 leadDate.getFullYear() === now.getFullYear();
+          return leadQuarter === currentQuarter && leadYear === currentYear
         case "yearly":
-          return leadDate.getFullYear() === now.getFullYear();
+          return leadYear === currentYear
         default:
-          return true;
+          return true
       }
-    });
-  }, [leads, period, searchTerm]);
+    })
+  }
+
+  const filteredLeads = useMemo(() => {
+    return filterLeadsByPeriod(leads, period).filter(
+      (lead) =>
+        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.need.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+  }, [leads, period, searchTerm])
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
+    setSearchTerm(e.target.value)
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewLead((prev) => ({ ...prev, [name]: value }));
+    const { name, value } = e.target
+    if (selectedLead) {
+      setSelectedLead(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewLead(prev => ({ ...prev, [name]: value }))
+    }
   }
 
-  const handleSelectChange = (name: keyof Lead, value: string) => {
-    setNewLead((prev) => ({ ...prev, [name]: value }));
+  const handleSelectChange = (name: string, value: string) => {
+    if (selectedLead) {
+      setSelectedLead(prev => ({ ...prev!, [name]: value }))
+    } else {
+      setNewLead(prev => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleDeleteLead = async (id: string | number) => {
     try {
-      await remove("leads", typeof id === 'string' ? parseInt(id) : id);
-      setLeads(leads.filter((lead) => lead.id !== id));
+      if (window.confirm("确定要删除此线索吗？此操作不可恢复。")) {
+        await remove("leads", typeof id === 'string' ? parseInt(id) : id);
+        setLeads(prev => prev.filter(lead => lead.id !== id));
+      }
     } catch (error) {
       console.error("Error deleting lead:", error);
     }
-  }
+  };
 
   const getPossibilityColor = (possibility: "高" | "中" | "低"): string => {
     switch (possibility) {
@@ -181,8 +203,22 @@ export function LeadsPage() {
     )
   }
 
-  const handleAddLead = async () => {
-      try {
+  // 打开编辑对话框
+  const handleEditLead = (lead: Lead) => {
+    setSelectedLead(lead);
+    setDialogOpen(true);
+  };
+
+  // 提交表单（添加或更新）
+  const handleSubmit = async () => {
+    try {
+      if (selectedLead) {
+        // 更新现有商机
+        await put("leads", selectedLead);
+        setLeads(prev => prev.map(item => item.id === selectedLead.id ? selectedLead : item));
+        setSelectedLead(null);
+      } else {
+        // 添加新商机
         const addedLead = await add("leads", newLead);
         setLeads(prev => [...prev, { ...newLead, id: addedLead as number }]);
         
@@ -198,10 +234,18 @@ export function LeadsPage() {
           quarter: getQuarter(new Date()),
           amount: 0,
         });
-      } catch (error) {
-        console.error("Error adding lead:", error);
       }
-    };
+      setDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving lead:", error);
+    }
+  };
+
+  // 关闭对话框并重置状态
+  const handleCloseDialog = () => {
+    setSelectedLead(null);
+    setDialogOpen(false);
+  };
 
   // 格式化金额
   const formatAmount = (amount: number) => {
@@ -249,16 +293,16 @@ export function LeadsPage() {
           <Button variant="outline" size="icon" className="rounded-lg">
             <Filter className="h-4 w-4" />
           </Button>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="rounded-lg bg-gradient-to-r from-brand-blue to-brand-indigo hover:from-brand-blue/90 hover:to-brand-indigo/90 transition-all duration-300">
+              <Button className="rounded-lg bg-gradient-to-r from-brand-blue to-brand-indigo hover:from-brand-blue/90 hover:to-brand-indigo/90 transition-all duration-300" onClick={() => setSelectedLead(null)}>
                 <Plus className="mr-2 h-4 w-4" />
                 添加线索
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[550px] rounded-xl">
               <DialogHeader>
-                <DialogTitle className="text-xl">添加新线索</DialogTitle>
+                <DialogTitle className="text-xl">{selectedLead ? "编辑商机" : "添加新线索"}</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -268,7 +312,7 @@ export function LeadsPage() {
                   <Input
                     id="name"
                     name="name"
-                    value={newLead.name}
+                    value={selectedLead ? selectedLead.name : newLead.name}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -280,7 +324,7 @@ export function LeadsPage() {
                   <Textarea
                     id="need"
                     name="need"
-                    value={newLead.need}
+                    value={selectedLead ? selectedLead.need : newLead.need}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -289,7 +333,7 @@ export function LeadsPage() {
                   <Label htmlFor="stage" className="text-right">
                     项目阶段
                   </Label>
-                  <Select value={newLead.stage} onValueChange={(value) => handleSelectChange("stage", value)}>
+                  <Select value={selectedLead ? selectedLead.stage : newLead.stage} onValueChange={(value) => handleSelectChange("stage", value)}>
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择项目阶段" />
                     </SelectTrigger>
@@ -308,7 +352,7 @@ export function LeadsPage() {
                   <Input
                     id="advantage"
                     name="advantage"
-                    value={newLead.advantage}
+                    value={selectedLead ? selectedLead.advantage : newLead.advantage}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -320,7 +364,7 @@ export function LeadsPage() {
                   <Input
                     id="disadvantage"
                     name="disadvantage"
-                    value={newLead.disadvantage}
+                    value={selectedLead ? selectedLead.disadvantage : newLead.disadvantage}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -329,10 +373,7 @@ export function LeadsPage() {
                   <Label htmlFor="possibility" className="text-right">
                     可能性
                   </Label>
-                  <Select
-                    value={newLead.possibility}
-                    onValueChange={(value) => handleSelectChange("possibility", value)}
-                  >
+                  <Select value={selectedLead ? selectedLead.possibility : newLead.possibility} onValueChange={(value) => handleSelectChange("possibility", value)}>
                     <SelectTrigger className="col-span-3 rounded-lg">
                       <SelectValue placeholder="选择可能性" />
                     </SelectTrigger>
@@ -345,13 +386,13 @@ export function LeadsPage() {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="amount" className="text-right">
-                    金额
+                    金额 (元)
                   </Label>
                   <Input
                     id="amount"
                     name="amount"
                     type="number"
-                    value={newLead.amount}
+                    value={selectedLead ? String(selectedLead.amount || 0) : String(newLead.amount || 0)}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
                   />
@@ -359,18 +400,11 @@ export function LeadsPage() {
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" className="rounded-lg">
-                    取消
-                  </Button>
+                  <Button variant="outline" onClick={handleCloseDialog}>取消</Button>
                 </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    onClick={handleAddLead}
-                    className="rounded-lg bg-gradient-to-r from-brand-blue to-brand-indigo"
-                  >
-                    保存
-                  </Button>
-                </DialogClose>
+                <Button type="submit" onClick={handleSubmit}>
+                  {selectedLead ? "更新" : "添加"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -399,7 +433,7 @@ export function LeadsPage() {
               <TableHead className="py-3 w-[120px]">劣势</TableHead>
               <TableHead className="py-3 w-[80px]">可能性</TableHead>
               <TableHead className="py-3 text-right w-[100px]">金额</TableHead>
-              <TableHead className="w-[80px] py-3 text-right">操作</TableHead>
+              <TableHead className="w-[100px] py-3 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -423,15 +457,26 @@ export function LeadsPage() {
                     {formatAmount(lead.amount || 0)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteLead(lead.id!)}
-                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">删除</span>
-                    </Button>
+                    <div className="flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditLead(lead)}
+                        className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity mr-1"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">编辑</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteLead(lead.id!)}
+                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">删除</span>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
