@@ -250,7 +250,7 @@ export async function getGoalsByQuarters() {
   goals.forEach((goal: any) => {
     if (goal.quarter && goal.type) {
       if (result[goal.quarter as keyof typeof result][goal.type]) {
-        result[goal.quarter as keyof typeof result][goal.type].target = goal.target || 0
+        result[goal.quarter as keyof typeof result][goal.type].target = Number(goal.target) || 0
       }
     }
   })
@@ -327,11 +327,9 @@ export async function getGoalsByQuarters() {
     const leadsCount = quarterLeads.length
     const prospectsCount = quarterProspects.length
     const visitsCount = quarterVisits.length + quarterVisitPlans.length + quarterVisitProjects.length
-
-    // 从合同表获取所有合同
-    const allContracts = await db.getAll("contracts")
     
     // 计算合同金额总计 - 使用所有客户的合同金额总和
+    // 使用外层已获取的合同数据，避免重复查询
     const quarterContractsAmount = allContracts.reduce((sum, contract: any) => {
       // 尝试获取合同日期
       const contractDate = contract.date ? new Date(contract.date) : null
@@ -1000,33 +998,34 @@ export async function getContractsByQuarter(quarter: string) {
       return []
   }
   
-  console.log(`获取${quarter}季度合同 (${startDate.toISOString()} - ${endDate.toISOString()})`);
+  console.log(`获取${quarter}季度合同 (${startDate.toISOString()} - ${endDate.toISOString()})`)
   
   // 筛选指定季度的合同
   const quarterContracts = contracts.filter(contract => {
-    // 确保合同有日期字段
-    if (!contract.date) {
-      console.log(`合同缺少日期字段:`, contract);
+    // 确保日期格式正确，处理可能的无效日期
+    let contractDate: Date | null = null;
+    try {
+      contractDate = contract.date ? new Date(contract.date) : null;
+    } catch (e) {
+      console.error(`合同${contract.id}的日期格式无效:`, contract.date);
       return false;
     }
     
-    // 将合同日期转换为Date对象
-    const contractDate = new Date(contract.date);
-    
-    // 检查日期是否有效
-    if (isNaN(contractDate.getTime())) {
-      console.log(`合同日期无效:`, contract.date);
-      return false;
-    }
-    
-    // 检查合同是否在指定季度范围内
-    const inRange = contractDate >= startDate && contractDate <= endDate;
-    console.log(`合同ID:${contract.id}, 日期:${contractDate.toISOString()}, 在范围内:${inRange}`);
-    return inRange;
+    // 确保合同日期有效，且在季度范围内
+    return contractDate && 
+           contractDate >= startDate && 
+           contractDate <= endDate;
+  }).map(contract => {
+    // 确保合同金额为数字
+    return {
+      ...contract,
+      amount: typeof contract.amount === 'number' ? 
+              contract.amount : 
+              Number.parseFloat(contract.amount) || 0
+    };
   });
   
-  console.log(`找到${quarterContracts.length}个${quarter}季度合同`);
-  return quarterContracts;
+  return quarterContracts
 }
 
 export async function initSampleData() {

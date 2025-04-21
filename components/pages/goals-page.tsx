@@ -108,23 +108,28 @@ export function GoalsPage() {
       totals[type] = { actual: 0, target: 0 };
     });
     
-
-    
     // 累加四个季度的值
     ["Q1", "Q2", "Q3", "Q4"].forEach(quarter => {
       if (quartersData[quarter]) {
         goalTypes.forEach(type => {
           if (quartersData[quarter][type]) {
-            // 详细记录每个值的累加过程
-            console.log(`累加数据: ${quarter} - ${type}:`, 
-              `当前值=${totals[type].actual}, 待加值=${quartersData[quarter][type].actual}, 类型=${typeof quartersData[quarter][type].actual}`);
-            
             // 确保值是数字并正确累加
-            const actualToAdd = Number(quartersData[quarter][type].actual || 0);
-            const targetToAdd = Number(quartersData[quarter][type].target || 0);
+            const actualToAdd = typeof quartersData[quarter][type].actual === 'number' ? 
+                               quartersData[quarter][type].actual : 
+                               Number(quartersData[quarter][type].actual || 0);
+                               
+            const targetToAdd = typeof quartersData[quarter][type].target === 'number' ? 
+                               quartersData[quarter][type].target : 
+                               Number(quartersData[quarter][type].target || 0);
             
-            totals[type].actual += actualToAdd;
-            totals[type].target += targetToAdd;
+            // 避免NaN和无效值
+            if (!isNaN(actualToAdd)) {
+              totals[type].actual += actualToAdd;
+            }
+            
+            if (!isNaN(targetToAdd)) {
+              totals[type].target += targetToAdd;
+            }
           }
         });
       }
@@ -137,6 +142,7 @@ export function GoalsPage() {
   // 获取最新目标数据
   const fetchGoalsData = async () => {
     try {
+      // 已在loadData函数中设置了loading状态，这里不需要重复设置
       const quarters = await getGoalsByQuarters();
       
       // 打印原始数据结构
@@ -160,6 +166,8 @@ export function GoalsPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
+        
         // 获取目标数据
         await fetchGoalsData();
         
@@ -185,17 +193,22 @@ export function GoalsPage() {
   }
 
   const calculateProgress = (actual: number, target: number): number => {
-    if (!target) return 0
-    const progress = Math.round((actual / target) * 100)
-    return progress > 100 ? 100 : progress
+    if (!target || isNaN(actual) || isNaN(target)) return 0;
+    const progress = Math.round((actual / target) * 100);
+    return progress > 100 ? 100 : progress;
   }
 
   const formatCurrency = (value: number): string => {
+    // 确保value是有效的数字
+    if (isNaN(value) || value === undefined || value === null) {
+      return "0";
+    }
+    
     return new Intl.NumberFormat("zh-CN", {
       style: "decimal",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value)
+    }).format(value);
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

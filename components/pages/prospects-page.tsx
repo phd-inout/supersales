@@ -221,7 +221,7 @@ export function ProspectsPage() {
           disadvantage: "",
           possibility: "中",
           date: new Date(),
-          amount: null
+          amount: null,
         })
       }
       setDialogOpen(false);
