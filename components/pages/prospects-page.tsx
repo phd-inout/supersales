@@ -24,7 +24,7 @@ import type { FormEvent } from "react"
 import { buttonVariants } from "@/components/ui/button"
 import { badgeVariants } from "@/components/ui/badge"
 import { getAll, add, remove, put, convertToCustomer } from "@/lib/db-service"
-import { getWeekNumber } from "@/lib/date-utils"
+import { getWeekNumber, getQuarter } from "@/lib/date-utils"
 
 // 定义Prospect接口
 interface Prospect {
@@ -33,10 +33,10 @@ interface Prospect {
   need: string;
   stage: string;
   advantage: string;
-  disadvantage: string; 
+  disadvantage: string;
   possibility: string;
   date: Date;
-  amount: number;
+  amount: number | null;
 }
 
 export function ProspectsPage() {
@@ -47,15 +47,15 @@ export function ProspectsPage() {
   const [period, setPeriod] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("weekly");
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newProspect, setNewProspect] = useState<Prospect>({
+  const [newProspect, setNewProspect] = useState<Omit<Prospect, 'id'>>({
     name: "",
     need: "",
-    stage: "需求调研",
+    stage: "初步接触",
     advantage: "",
     disadvantage: "",
     possibility: "中",
     date: new Date(),
-    amount: 0,
+    amount: null,
   })
 
   useEffect(() => {
@@ -140,11 +140,26 @@ export function ProspectsPage() {
   }
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
+    
+    // 特殊处理金额字段
+    if (name === "amount") {
+      // 允许空值或数字输入
+      const newValue = value === "" ? null : Number(value);
+      
+      if (selectedProspect) {
+        setSelectedProspect(prev => ({ ...prev!, [name]: newValue }));
+      } else {
+        setNewProspect(prev => ({ ...prev, [name]: newValue }));
+      }
+      return;
+    }
+    
+    // 常规字段处理
     if (selectedProspect) {
-      setSelectedProspect(prev => ({ ...prev!, [name]: value }))
+      setSelectedProspect(prev => ({ ...prev!, [name]: value }));
     } else {
-      setNewProspect((prev) => ({ ...prev, [name]: value }))
+      setNewProspect(prev => ({ ...prev, [name]: value }));
     }
   }
 
@@ -188,7 +203,11 @@ export function ProspectsPage() {
       } else {
         // 添加新潜在客户
         const { add } = await import("@/lib/db-service")
-        const id = await add("prospects", newProspect)
+        const id = await add("prospects", {
+          ...newProspect,
+          // 确保null金额保存为0
+          amount: newProspect.amount === null ? 0 : newProspect.amount
+        })
 
         // 更新状态
         setProspects([...prospects, { ...newProspect, id: id as string | number }])
@@ -197,12 +216,12 @@ export function ProspectsPage() {
         setNewProspect({
           name: "",
           need: "",
-          stage: "需求调研",
+          stage: "初步接触",
           advantage: "",
           disadvantage: "",
           possibility: "中",
           date: new Date(),
-          amount: 0,
+          amount: null
         })
       }
       setDialogOpen(false);
@@ -403,9 +422,10 @@ export function ProspectsPage() {
                     id="amount"
                     name="amount"
                     type="number"
-                    value={selectedProspect ? String(selectedProspect.amount || 0) : String(newProspect.amount || 0)}
+                    value={selectedProspect ? (selectedProspect.amount === null ? "" : String(selectedProspect.amount)) : (newProspect.amount === null ? "" : String(newProspect.amount))}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
+                    placeholder="可选，留空表示0元"
                   />
                 </div>
               </div>

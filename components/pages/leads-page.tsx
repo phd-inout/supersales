@@ -39,7 +39,7 @@ interface Lead {
   possibility: string;
   date: Date;
   quarter: string;
-  amount: number;
+  amount: number | null;
 }
 
 export function LeadsPage() {
@@ -59,7 +59,7 @@ export function LeadsPage() {
     possibility: "中",
     date: new Date(),
     quarter: getQuarter(new Date()),
-    amount: 0,
+    amount: null,
   });
   // 添加对话框显示状态
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -140,11 +140,26 @@ export function LeadsPage() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
+    
+    // 特殊处理金额字段
+    if (name === "amount") {
+      // 允许空值或数字输入
+      const newValue = value === "" ? null : Number(value);
+      
+      if (selectedLead) {
+        setSelectedLead(prev => ({ ...prev!, [name]: newValue }));
+      } else {
+        setNewLead(prev => ({ ...prev, [name]: newValue }));
+      }
+      return;
+    }
+    
+    // 常规字段处理
     if (selectedLead) {
-      setSelectedLead(prev => ({ ...prev!, [name]: value }))
+      setSelectedLead(prev => ({ ...prev!, [name]: value }));
     } else {
-      setNewLead(prev => ({ ...prev, [name]: value }))
+      setNewLead(prev => ({ ...prev, [name]: value }));
     }
   }
 
@@ -234,7 +249,11 @@ export function LeadsPage() {
         setSelectedLead(null);
       } else {
         // 添加新商机
-        const addedLead = await add("leads", newLead);
+        const addedLead = await add("leads", {
+          ...newLead,
+          // 确保null金额保存为0
+          amount: newLead.amount === null ? 0 : newLead.amount
+        });
         setLeads(prev => [...prev, { ...newLead, id: addedLead as number }]);
         
         // 重置表单
@@ -247,7 +266,7 @@ export function LeadsPage() {
           possibility: "中",
           date: new Date(),
           quarter: getQuarter(new Date()),
-          amount: 0,
+          amount: null,
         });
       }
       setDialogOpen(false);
@@ -407,9 +426,10 @@ export function LeadsPage() {
                     id="amount"
                     name="amount"
                     type="number"
-                    value={selectedLead ? String(selectedLead.amount || 0) : String(newLead.amount || 0)}
+                    value={selectedLead ? (selectedLead.amount === null ? "" : String(selectedLead.amount)) : (newLead.amount === null ? "" : String(newLead.amount))}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
+                    placeholder="可选，留空表示0元"
                   />
                 </div>
               </div>

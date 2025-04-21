@@ -1000,15 +1000,33 @@ export async function getContractsByQuarter(quarter: string) {
       return []
   }
   
-  console.log(`获取${quarter}季度合同 (${startDate.toISOString()} - ${endDate.toISOString()})`)
+  console.log(`获取${quarter}季度合同 (${startDate.toISOString()} - ${endDate.toISOString()})`);
   
   // 筛选指定季度的合同
   const quarterContracts = contracts.filter(contract => {
-    const contractDate = new Date(contract.date)
-    return contractDate >= startDate && contractDate <= endDate
-  })
+    // 确保合同有日期字段
+    if (!contract.date) {
+      console.log(`合同缺少日期字段:`, contract);
+      return false;
+    }
+    
+    // 将合同日期转换为Date对象
+    const contractDate = new Date(contract.date);
+    
+    // 检查日期是否有效
+    if (isNaN(contractDate.getTime())) {
+      console.log(`合同日期无效:`, contract.date);
+      return false;
+    }
+    
+    // 检查合同是否在指定季度范围内
+    const inRange = contractDate >= startDate && contractDate <= endDate;
+    console.log(`合同ID:${contract.id}, 日期:${contractDate.toISOString()}, 在范围内:${inRange}`);
+    return inRange;
+  });
   
-  return quarterContracts
+  console.log(`找到${quarterContracts.length}个${quarter}季度合同`);
+  return quarterContracts;
 }
 
 export async function initSampleData() {

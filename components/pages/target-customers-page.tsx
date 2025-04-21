@@ -32,8 +32,8 @@ interface Target {
   advantage: string;
   disadvantage: string;
   possibility: string;
-  amount: number;
   date: Date;
+  amount: number | null;
 }
 
 export function TargetCustomersPage() {
@@ -46,14 +46,14 @@ export function TargetCustomersPage() {
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   // 添加对话框显示状态
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newTarget, setNewTarget] = useState({
+  const [newTarget, setNewTarget] = useState<Omit<Target, 'id'>>({
     name: "",
     need: "",
     stage: "商务谈判",
     advantage: "",
     disadvantage: "",
     possibility: "高",
-    amount: 0, // 添加金额字段
+    amount: null,
     date: new Date(),
   })
 
@@ -125,10 +125,25 @@ export function TargetCustomersPage() {
   // 处理输入变化
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+    
+    // 特殊处理金额字段
+    if (name === "amount") {
+      // 允许空值或数字输入
+      const newValue = value === "" ? null : Number(value);
+      
+      if (selectedTarget) {
+        setSelectedTarget(prev => ({ ...prev!, [name]: newValue }));
+      } else {
+        setNewTarget(prev => ({ ...prev, [name]: newValue }));
+      }
+      return;
+    }
+    
+    // 常规字段处理
     if (selectedTarget) {
-      setSelectedTarget(prev => ({ ...prev!, [name]: value }))
+      setSelectedTarget(prev => ({ ...prev!, [name]: value }));
     } else {
-      setNewTarget((prev) => ({ ...prev, [name]: value }))
+      setNewTarget(prev => ({ ...prev, [name]: value }));
     }
   }
 
@@ -172,7 +187,11 @@ export function TargetCustomersPage() {
         setSelectedTarget(null);
       } else {
         // 添加新客户
-        const id = await add("targets", newTarget)
+        const id = await add("targets", {
+          ...newTarget,
+          // 确保null金额保存为0
+          amount: newTarget.amount === null ? 0 : newTarget.amount
+        })
 
         // 更新状态
         setTargets([...targets, { ...newTarget, id: id as string | number }])
@@ -185,7 +204,7 @@ export function TargetCustomersPage() {
           advantage: "",
           disadvantage: "",
           possibility: "高",
-          amount: 0, // 重置金额
+          amount: null,
           date: new Date(),
         })
       }
@@ -227,6 +246,8 @@ export function TargetCustomersPage() {
       case "方案设计":
         return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
       case "商务谈判":
+        return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300"
+      case "合同签订":
         return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
@@ -396,9 +417,10 @@ export function TargetCustomersPage() {
                     id="amount"
                     name="amount"
                     type="number"
-                    value={selectedTarget ? String(selectedTarget.amount || 0) : String(newTarget.amount || 0)}
+                    value={selectedTarget ? (selectedTarget.amount === null ? "" : String(selectedTarget.amount)) : (newTarget.amount === null ? "" : String(newTarget.amount))}
                     onChange={handleInputChange}
                     className="col-span-3 rounded-lg"
+                    placeholder="可选，留空表示0元"
                   />
                 </div>
               </div>
