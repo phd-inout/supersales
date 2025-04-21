@@ -260,7 +260,8 @@ export async function getGoalsByQuarters() {
   const allLeads = await db.getAll("leads")
   const allProspects = await db.getAll("prospects")
   const allVisits = await db.getAll("visits")
-  const allContracts = await db.getAll("contracts")
+  const allCustomers = await db.getAll("customers") // 正式客户数据
+  const allContracts = await db.getAll("contracts") // 合同数据
   const allPlans = await db.getAll("plans")
   const allProjects = await db.getAll("projects")
 
@@ -316,10 +317,10 @@ export async function getGoalsByQuarters() {
              project.type === "拜访"
     })
 
-    // 计算合同数据
-    const quarterContracts = allContracts.filter(contract => {
-      const contractDate = new Date(contract.date)
-      return contractDate >= dateRange.start && contractDate <= dateRange.end
+    // 计算客户数据 - 使用客户的加入时间判断季度
+    const quarterCustomers = allCustomers.filter(customer => {
+      const joinDate = new Date(customer.joinDate)
+      return joinDate >= dateRange.start && joinDate <= dateRange.end
     })
 
     // 计算各类指标的实际值
@@ -327,24 +328,36 @@ export async function getGoalsByQuarters() {
     const prospectsCount = quarterProspects.length
     const visitsCount = quarterVisits.length + quarterVisitPlans.length + quarterVisitProjects.length
 
-    // 计算合同金额
-    const contractsAmount = quarterContracts.reduce((sum, contract) => {
-      return sum + (Number(contract.amount) || 0)
-    }, 0)
+    // 从合同表获取所有合同
+    const allContracts = await db.getAll("contracts")
+    
+    // 计算合同金额总计 - 使用所有客户的合同金额总和
+    const quarterContractsAmount = allContracts.reduce((sum, contract: any) => {
+      // 尝试获取合同日期
+      const contractDate = contract.date ? new Date(contract.date) : null
+      
+      // 如果合同有日期且在当前季度范围内，则计入本季度，否则不计入
+      if (contractDate && contractDate >= dateRange.start && contractDate <= dateRange.end) {
+        const amount = typeof contract.amount === 'number' ? contract.amount : 
+                       (Number.parseFloat(contract.amount) || 0);
+        return sum + amount;
+      }
+      return sum;
+    }, 0);
 
     // 假设利润是合同金额的30%
-    const profitAmount = contractsAmount * 0.3
+    const profitAmount = quarterContractsAmount * 0.3;
 
     // 假设回款是合同金额的70%
-    const paymentAmount = contractsAmount * 0.7
+    const paymentAmount = quarterContractsAmount * 0.7;
 
     // 更新实际值
-    result[quarter as keyof typeof result]["leads"].actual = leadsCount
-    result[quarter as keyof typeof result]["prospects"].actual = prospectsCount
-    result[quarter as keyof typeof result]["visits"].actual = visitsCount
-    result[quarter as keyof typeof result]["contracts"].actual = contractsAmount
-    result[quarter as keyof typeof result]["profit"].actual = profitAmount
-    result[quarter as keyof typeof result]["payment"].actual = paymentAmount
+    result[quarter as keyof typeof result]["leads"].actual = leadsCount;
+    result[quarter as keyof typeof result]["prospects"].actual = prospectsCount;
+    result[quarter as keyof typeof result]["visits"].actual = visitsCount;
+    result[quarter as keyof typeof result]["contracts"].actual = quarterContractsAmount;
+    result[quarter as keyof typeof result]["profit"].actual = profitAmount;
+    result[quarter as keyof typeof result]["payment"].actual = paymentAmount;
   }
 
   console.log("按季度计算的目标数据:", result)
@@ -820,27 +833,24 @@ export async function saveUserSettings(settings: { companyName: string; userName
 export async function getCustomerDistribution() {
   const db = await initDB()
 
-  // 获取各类客户数量
+  // 获取各类客户数量 - 使用正确的数据源
   const leadsCount = await db.count("leads")
   const prospectsCount = await db.count("prospects")
-  const targetsCount = await db.count("targets")
-
-  // 获取合同数量（假设已签约的客户）
-  const contractsCount = await db.count("contracts")
+  const customersCount = await db.count("customers") // 改为从customers表获取正式客户数量
 
   // 计算总数
-  const total = leadsCount + prospectsCount + targetsCount + contractsCount
+  const total = leadsCount + prospectsCount + customersCount
 
   // 如果没有数据，返回空数组
   if (total === 0) {
     return []
   }
 
-  // 计算百分比 - 去掉已签约选项，因为客户就是已签约的意思
+  // 计算百分比 - 正确区分三种类型
   return [
     { name: "商机线索", value: Math.round((leadsCount / total) * 100) },
     { name: "潜在客户", value: Math.round((prospectsCount / total) * 100) },
-    { name: "正式客户", value: Math.round(((targetsCount + contractsCount) / total) * 100) },
+    { name: "正式客户", value: Math.round((customersCount / total) * 100) },
   ]
 }
 
@@ -1032,20 +1042,15 @@ export async function getContractsAmount() {
   
   // 从contracts表获取金额总和
   const contracts = await db.getAll("contracts");
-  const contractsAmount = contracts.reduce((total, contract) => total + (contract.amount || 0), 0);
-  
-  // 从targets表(客户)获取金额总和
-  const targets = await db.getAll("targets");
-  const targetsAmount = targets.reduce((total, target) => {
-    const amount = typeof target.amount === 'number' ? target.amount : 
-                  (Number.parseFloat(target.amount) || 0);
+  const contractsAmount = contracts.reduce((total, contract) => {
+    // 确保金额是数字
+    const amount = typeof contract.amount === 'number' ? contract.amount : 
+                   (Number.parseFloat(contract.amount) || 0);
     return total + amount;
   }, 0);
   
-  console.log(`合同金额统计: contracts=${contractsAmount}, targets(客户)=${targetsAmount}, total=${contractsAmount + targetsAmount}`);
-  
-  // 返回两者合计
-  return contractsAmount + targetsAmount;
+  console.log("合同金额统计:", contractsAmount);
+  return contractsAmount;
 }
 
 // 获取客户数量
