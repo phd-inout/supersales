@@ -220,6 +220,7 @@ export function formatWeekDisplay(year: number, week: number) {
 export async function getGoalsByQuarters() {
   const db = await initDB()
   const goals = await db.getAll("goals")
+  const currentYear = new Date().getFullYear()
 
   // 按季度分组
   const result: {
@@ -234,17 +235,119 @@ export async function getGoalsByQuarters() {
     Q4: {},
   }
 
+  // 预先设置所有季度默认目标类型
+  const goalTypes = ["leads", "visits", "prospects", "contracts", "profit", "payment"]
+  for (const quarter of ["Q1", "Q2", "Q3", "Q4"]) {
+    for (const type of goalTypes) {
+      result[quarter as keyof typeof result][type] = {
+        actual: 0,
+        target: 0
+      }
+    }
+  }
+
+  // 设置目标值
   goals.forEach((goal: any) => {
     if (goal.quarter && goal.type) {
-      if (!result[goal.quarter as keyof typeof result][goal.type]) {
-        result[goal.quarter as keyof typeof result][goal.type] = {
-          actual: goal.actual || 0,
-          target: goal.target || 0,
-        }
+      if (result[goal.quarter as keyof typeof result][goal.type]) {
+        result[goal.quarter as keyof typeof result][goal.type].target = goal.target || 0
       }
     }
   })
 
+  // 获取实际完成情况的数据
+  // 1. 获取所有需要的数据
+  const allLeads = await db.getAll("leads")
+  const allProspects = await db.getAll("prospects")
+  const allVisits = await db.getAll("visits")
+  const allContracts = await db.getAll("contracts")
+  const allPlans = await db.getAll("plans")
+  const allProjects = await db.getAll("projects")
+
+  // 2. 根据季度范围筛选数据并计算实际值
+  // 定义季度日期范围
+  const quarterDateRanges = {
+    Q1: {
+      start: new Date(currentYear, 0, 1),
+      end: new Date(currentYear, 2, 31, 23, 59, 59, 999)
+    },
+    Q2: {
+      start: new Date(currentYear, 3, 1),
+      end: new Date(currentYear, 5, 30, 23, 59, 59, 999)
+    },
+    Q3: {
+      start: new Date(currentYear, 6, 1),
+      end: new Date(currentYear, 8, 30, 23, 59, 59, 999)
+    },
+    Q4: {
+      start: new Date(currentYear, 9, 1),
+      end: new Date(currentYear, 11, 31, 23, 59, 59, 999)
+    }
+  }
+
+  // 为每个季度计算实际数据
+  for (const [quarter, dateRange] of Object.entries(quarterDateRanges)) {
+    // 按日期筛选
+    const quarterLeads = allLeads.filter(lead => {
+      const leadDate = new Date(lead.date)
+      return leadDate >= dateRange.start && leadDate <= dateRange.end
+    })
+
+    const quarterProspects = allProspects.filter(prospect => {
+      const prospectDate = new Date(prospect.date)
+      return prospectDate >= dateRange.start && prospectDate <= dateRange.end
+    })
+
+    const quarterVisits = allVisits.filter(visit => {
+      const visitDate = new Date(visit.date)
+      return visitDate >= dateRange.start && visitDate <= dateRange.end
+    })
+
+    // 还需要计算计划和项目中的拜访
+    const quarterVisitPlans = allPlans.filter(plan => {
+      const planDate = new Date(plan.date)
+      return planDate >= dateRange.start && planDate <= dateRange.end && 
+             plan.type === "拜访" && plan.completed
+    })
+
+    const quarterVisitProjects = allProjects.filter(project => {
+      const projectDate = new Date(project.date)
+      return projectDate >= dateRange.start && projectDate <= dateRange.end && 
+             project.type === "拜访"
+    })
+
+    // 计算合同数据
+    const quarterContracts = allContracts.filter(contract => {
+      const contractDate = new Date(contract.date)
+      return contractDate >= dateRange.start && contractDate <= dateRange.end
+    })
+
+    // 计算各类指标的实际值
+    const leadsCount = quarterLeads.length
+    const prospectsCount = quarterProspects.length
+    const visitsCount = quarterVisits.length + quarterVisitPlans.length + quarterVisitProjects.length
+
+    // 计算合同金额
+    const contractsAmount = quarterContracts.reduce((sum, contract) => {
+      return sum + (Number(contract.amount) || 0)
+    }, 0)
+
+    // 假设利润是合同金额的30%
+    const profitAmount = contractsAmount * 0.3
+
+    // 假设回款是合同金额的70%
+    const paymentAmount = contractsAmount * 0.7
+
+    // 更新实际值
+    result[quarter as keyof typeof result]["leads"].actual = leadsCount
+    result[quarter as keyof typeof result]["prospects"].actual = prospectsCount
+    result[quarter as keyof typeof result]["visits"].actual = visitsCount
+    result[quarter as keyof typeof result]["contracts"].actual = contractsAmount
+    result[quarter as keyof typeof result]["profit"].actual = profitAmount
+    result[quarter as keyof typeof result]["payment"].actual = paymentAmount
+  }
+
+  console.log("按季度计算的目标数据:", result)
   return result
 }
 
@@ -304,6 +407,19 @@ export async function getWeeklyStats() {
   // 准备结果数据
   const result = []
 
+  console.log("生成周数据范围:", {
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0],
+    daysCount: weekDays.length
+  });
+
+  // 预先获取所有可能需要的数据
+  const allPlans = await db.getAll("plans")
+  const allProjects = await db.getAll("projects")
+  const allLeads = await db.getAll("leads")
+  const allProspects = await db.getAll("prospects")
+  const allVisits = await db.getAll("visits")
+
   for (const { date, name } of weekDays) {
     // 设置日期范围为当天的0点到23:59:59
     const dayStart = new Date(date)
@@ -312,48 +428,57 @@ export async function getWeeklyStats() {
     const dayEnd = new Date(date)
     dayEnd.setHours(23, 59, 59, 999)
 
-    // 查询当天创建的线索
-    const leadsRange = IDBKeyRange.bound(dayStart, dayEnd)
-    const leadsCount = await db.getAllFromIndex("leads", "date", leadsRange).then((items) => items.length)
-
-    // 查询当天创建的潜在客户
-    const prospectsCount = await db.getAllFromIndex("prospects", "date", leadsRange).then((items) => items.length)
-
-    // 查询当天的拜访记录
-    const visitsCount = await db.getAllFromIndex("visits", "date", leadsRange).then((items) => items.length)
-
-    // 查询当天类型为拜访的计划和项目事务
-    const plans = await db.getAll("plans")
-    const projects = await db.getAll("projects")
+    // 直接过滤内存中的数据，而不是多次查询数据库
+    
+    // 当天创建的线索
+    const dayLeads = allLeads.filter(lead => {
+      const leadDate = new Date(lead.date)
+      return leadDate >= dayStart && leadDate <= dayEnd
+    })
+    const leadsCount = dayLeads.length
+    
+    // 当天创建的潜在客户
+    const dayProspects = allProspects.filter(prospect => {
+      const prospectDate = new Date(prospect.date)
+      return prospectDate >= dayStart && prospectDate <= dayEnd
+    })
+    const prospectsCount = dayProspects.length
+    
+    // 当天的拜访记录
+    const dayVisits = allVisits.filter(visit => {
+      const visitDate = new Date(visit.date)
+      return visitDate >= dayStart && visitDate <= dayEnd
+    })
+    const visitsCount = dayVisits.length
     
     // 过滤当天的拜访计划（已完成）
-    const dayPlans = plans.filter(plan => {
+    const dayPlansCount = allPlans.filter(plan => {
       const planDate = new Date(plan.date)
       return planDate >= dayStart && planDate <= dayEnd && plan.type === "拜访" && plan.completed
     }).length
     
     // 过滤当天的拜访项目事务
-    const dayProjects = projects.filter(project => {
+    const dayProjectsCount = allProjects.filter(project => {
       const projectDate = new Date(project.date)
       return projectDate >= dayStart && projectDate <= dayEnd && project.type === "拜访"
     }).length
     
     // 总拜访数
-    const totalVisitsCount = visitsCount + dayPlans + dayProjects
+    const totalVisitsCount = visitsCount + dayPlansCount + dayProjectsCount
 
     // 查询当天类型为电话的计划和项目事务
-    const phonePlans = plans.filter(plan => {
+    const phonePlansCount = allPlans.filter(plan => {
       const planDate = new Date(plan.date)
       return planDate >= dayStart && planDate <= dayEnd && plan.type === "电话" && plan.completed
     }).length
     
-    const phoneProjects = projects.filter(project => {
+    const phoneProjectsCount = allProjects.filter(project => {
       const projectDate = new Date(project.date)
       return projectDate >= dayStart && projectDate <= dayEnd && project.type === "电话"
     }).length
     
     // 总电话联系数
-    const totalPhoneCallsCount = phonePlans + phoneProjects
+    const totalPhoneCallsCount = phonePlansCount + phoneProjectsCount
 
     result.push({
       name,
@@ -364,76 +489,137 @@ export async function getWeeklyStats() {
     })
   }
 
+  console.log("周统计数据:", result);
   return result
 }
 
 // 获取按月统计的数据
 export async function getMonthlyStats() {
-  const currentYear = new Date().getFullYear()
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
   const db = await initDB()
 
   // 准备结果数据
   const result = []
-  const monthNames = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
+  
+  // 当前月份的周数
+  const currentMonthWeeks = getMonthWeeks(currentYear, currentMonth)
+  
+  console.log("生成月数据范围:", {
+    year: currentYear,
+    month: currentMonth + 1,
+    weeksCount: currentMonthWeeks.length
+  });
+  
+  // 预先获取所有可能需要的数据
+  const allPlans = await db.getAll("plans")
+  const allProjects = await db.getAll("projects")
+  const allLeads = await db.getAll("leads")
+  const allProspects = await db.getAll("prospects")
+  const allVisits = await db.getAll("visits")
 
-  for (let month = 0; month < 12; month++) {
-    // 设置月份的开始和结束日期
-    const monthStart = new Date(currentYear, month, 1)
-    const monthEnd = new Date(currentYear, month + 1, 0, 23, 59, 59, 999)
-
-    // 查询当月创建的线索
-    const monthRange = IDBKeyRange.bound(monthStart, monthEnd)
-    const leadsCount = await db.getAllFromIndex("leads", "date", monthRange).then((items) => items.length)
-
-    // 查询当月创建的潜在客户
-    const prospectsCount = await db.getAllFromIndex("prospects", "date", monthRange).then((items) => items.length)
-
-    // 查询当月的拜访记录
-    const visitsCount = await db.getAllFromIndex("visits", "date", monthRange).then((items) => items.length)
-
-    // 查询当月类型为拜访的计划和项目事务
-    const plans = await db.getAll("plans")
-    const projects = await db.getAll("projects")
+  // 计算每周的数据
+  for (let i = 0; i < currentMonthWeeks.length; i++) {
+    const { startDate, endDate } = currentMonthWeeks[i]
     
-    // 过滤当月的拜访计划（已完成）
-    const monthPlans = plans.filter(plan => {
+    // 当周创建的线索
+    const weekLeads = allLeads.filter(lead => {
+      const leadDate = new Date(lead.date)
+      return leadDate >= startDate && leadDate <= endDate
+    })
+    const leadsCount = weekLeads.length
+    
+    // 当周创建的潜在客户
+    const weekProspects = allProspects.filter(prospect => {
+      const prospectDate = new Date(prospect.date)
+      return prospectDate >= startDate && prospectDate <= endDate
+    })
+    const prospectsCount = weekProspects.length
+    
+    // 当周的拜访记录
+    const weekVisits = allVisits.filter(visit => {
+      const visitDate = new Date(visit.date)
+      return visitDate >= startDate && visitDate <= endDate
+    })
+    const visitsCount = weekVisits.length
+    
+    // 过滤当周的拜访计划（已完成）
+    const weekPlansCount = allPlans.filter(plan => {
       const planDate = new Date(plan.date)
-      return planDate >= monthStart && planDate <= monthEnd && plan.type === "拜访" && plan.completed
+      return planDate >= startDate && planDate <= endDate && plan.type === "拜访" && plan.completed
     }).length
     
-    // 过滤当月的拜访项目事务
-    const monthProjects = projects.filter(project => {
+    // 过滤当周的拜访项目事务
+    const weekProjectsCount = allProjects.filter(project => {
       const projectDate = new Date(project.date)
-      return projectDate >= monthStart && projectDate <= monthEnd && project.type === "拜访"
+      return projectDate >= startDate && projectDate <= endDate && project.type === "拜访"
     }).length
     
     // 总拜访数
-    const totalVisitsCount = visitsCount + monthPlans + monthProjects
+    const totalVisitsCount = visitsCount + weekPlansCount + weekProjectsCount
 
-    // 查询当月类型为电话的计划和项目事务
-    const phonePlans = plans.filter(plan => {
+    // 查询当周类型为电话的计划和项目事务
+    const phonePlansCount = allPlans.filter(plan => {
       const planDate = new Date(plan.date)
-      return planDate >= monthStart && planDate <= monthEnd && plan.type === "电话" && plan.completed
+      return planDate >= startDate && planDate <= endDate && plan.type === "电话" && plan.completed
     }).length
     
-    const phoneProjects = projects.filter(project => {
+    const phoneProjectsCount = allProjects.filter(project => {
       const projectDate = new Date(project.date)
-      return projectDate >= monthStart && projectDate <= monthEnd && project.type === "电话"
+      return projectDate >= startDate && projectDate <= endDate && project.type === "电话"
     }).length
     
     // 总电话联系数
-    const totalPhoneCallsCount = phonePlans + phoneProjects
-
+    const totalPhoneCallsCount = phonePlansCount + phoneProjectsCount
+    
     result.push({
-      name: monthNames[month],
+      name: `第${i+1}周`,
       新增线索: leadsCount,
       新增潜在客户: prospectsCount,
       电话联系: totalPhoneCallsCount,
       拜访数量: totalVisitsCount,
     })
   }
-
+  
+  console.log("月统计数据:", result);
   return result
+}
+
+// 辅助函数：获取指定月份的所有周
+function getMonthWeeks(year: number, month: number) {
+  const weeks = []
+  
+  // 获取月份的第一天
+  const firstDay = new Date(year, month, 1)
+  
+  // 获取月份的最后一天
+  const lastDay = new Date(year, month + 1, 0)
+  
+  // 获取第一周的开始（周一）
+  const firstWeekStart = new Date(firstDay)
+  const firstDayOfWeek = firstDay.getDay() || 7 // 将周日(0)转换为7
+  firstWeekStart.setDate(firstDay.getDate() - firstDayOfWeek + 1) // 调整到本周一
+  
+  // 计算所有周
+  let currentWeekStart = new Date(firstWeekStart)
+  
+  while (currentWeekStart <= lastDay) {
+    // 计算本周结束（周日）
+    const currentWeekEnd = new Date(currentWeekStart)
+    currentWeekEnd.setDate(currentWeekStart.getDate() + 6)
+    
+    // 添加本周
+    weeks.push({
+      startDate: new Date(currentWeekStart),
+      endDate: new Date(Math.min(currentWeekEnd.getTime(), lastDay.getTime()))
+    })
+    
+    // 移动到下一周
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7)
+  }
+  
+  return weeks
 }
 
 // 获取按季度统计的数据
@@ -650,12 +836,11 @@ export async function getCustomerDistribution() {
     return []
   }
 
-  // 计算百分比
+  // 计算百分比 - 去掉已签约选项，因为客户就是已签约的意思
   return [
     { name: "商机线索", value: Math.round((leadsCount / total) * 100) },
     { name: "潜在客户", value: Math.round((prospectsCount / total) * 100) },
-    { name: "客户", value: Math.round((targetsCount / total) * 100) },
-    { name: "已签约", value: Math.round((contractsCount / total) * 100) },
+    { name: "正式客户", value: Math.round(((targetsCount + contractsCount) / total) * 100) },
   ]
 }
 
@@ -689,29 +874,62 @@ export async function getReportSummary(period: string) {
   const contractsAmount = await getContractsAmount()
   const db = await initDB()
   const contractsCount = await db.count("contracts")
+  
+  console.log("数据源计数:", {
+    leadsCount,
+    prospectsCount,
+    targetsCount,
+    visitsCount,
+    phoneCallsCount,
+    contractsAmount,
+    contractsCount
+  });
+  
+  // 记录当前周期的数据
+  console.log(`${period}周期的数据:`, data);
 
   // 计算汇总数据
+  const dataNewLeads = data.reduce((sum, item) => sum + (item["新增线索"] || 0), 0);
+  const dataNewProspects = data.reduce((sum, item) => sum + (item["新增潜在客户"] || 0), 0);
+  const dataPhoneCalls = data.reduce((sum, item) => sum + (item["电话联系"] || 0), 0);
+  const dataVisits = data.reduce((sum, item) => sum + (item["拜访数量"] || 0), 0);
+  
+  console.log("周期数据计算:", {
+    dataNewLeads,
+    dataNewProspects,
+    dataPhoneCalls,
+    dataVisits
+  });
+  
   const summaryData = {
-    newLeads: data.reduce((sum, item) => sum + (item["新增线索"] || 0), 0) || leadsCount,
-    newProspects: data.reduce((sum, item) => sum + (item["新增潜在客户"] || 0), 0) || prospectsCount,
-    phoneCalls: data.reduce((sum, item) => sum + (item["电话联系"] || 0), 0) || phoneCallsCount,
-    visits: data.reduce((sum, item) => sum + (item["拜访数量"] || 0), 0) || visitsCount,
+    newLeads: dataNewLeads || leadsCount,
+    newProspects: dataNewProspects || prospectsCount,
+    phoneCalls: dataPhoneCalls || phoneCallsCount,
+    visits: dataVisits || visitsCount,
     conversionRate: 0,
     potentialValue: 0,
     contractValue: contractsAmount,
   }
+  
+  console.log("汇总数据初始值:", summaryData);
 
   // 计算转化率 - 修正的公式：客户数/(线索数+潜在客户数)
   const totalLeadsAndProspects = summaryData.newLeads + summaryData.newProspects;
   if (totalLeadsAndProspects > 0) {
-    // 使用targetsCount代表"客户"数量
-    summaryData.conversionRate = Math.round((targetsCount / totalLeadsAndProspects) * 100);
-    console.log(`转化率计算: 客户数(${targetsCount}) / (线索数(${summaryData.newLeads}) + 潜在客户数(${summaryData.newProspects})) = ${summaryData.conversionRate}%`);
+    // 使用客户表(customers)的数量作为已转化的客户数量，而不是targetsCount
+    const customersCount = await db.count("customers");
+    summaryData.conversionRate = Math.round((customersCount / totalLeadsAndProspects) * 100);
+    console.log(`转化率计算: 正式客户数(${customersCount}) / (线索数(${summaryData.newLeads}) + 潜在客户数(${summaryData.newProspects})) = ${summaryData.conversionRate}%`);
   }
 
   // 计算潜在价值（从leads和prospects表中获取amount字段的总和）
   const leads = await getAll("leads")
   const prospects = await getAll("prospects")
+  
+  console.log("潜在价值计算 - 数据源:", {
+    leadsCount: leads.length,
+    prospectsCount: prospects.length
+  });
   
   // 修复leads金额计算
   const leadsAmount = leads.reduce((sum, lead) => {
@@ -735,31 +953,52 @@ export async function getReportSummary(period: string) {
 
   // 合同金额仅计算客户的金额
   summaryData.contractValue = contractsAmount
+  
+  console.log("最终汇总数据:", summaryData);
 
   return summaryData
 }
 
-// 获取按季度分组的合同数据
+// 获取按季度获取合同数据
 export async function getContractsByQuarter(quarter: string) {
   const db = await initDB()
   const contracts = await db.getAll("contracts")
-
-  // 根据日期确定季度
-  const quarterMap: Record<string, number[]> = {
-    Q1: [0, 1, 2], // 1-3月
-    Q2: [3, 4, 5], // 4-6月
-    Q3: [6, 7, 8], // 7-9月
-    Q4: [9, 10, 11], // 10-12月
+  const currentYear = new Date().getFullYear()
+  
+  // 根据季度获取日期范围
+  let startDate: Date, endDate: Date
+  
+  switch (quarter) {
+    case "Q1":
+      startDate = new Date(currentYear, 0, 1) // 1月1日
+      endDate = new Date(currentYear, 2, 31, 23, 59, 59, 999) // 3月31日
+      break
+    case "Q2":
+      startDate = new Date(currentYear, 3, 1) // 4月1日
+      endDate = new Date(currentYear, 5, 30, 23, 59, 59, 999) // 6月30日
+      break
+    case "Q3":
+      startDate = new Date(currentYear, 6, 1) // 7月1日
+      endDate = new Date(currentYear, 8, 30, 23, 59, 59, 999) // 9月30日
+      break
+    case "Q4":
+      startDate = new Date(currentYear, 9, 1) // 10月1日
+      endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999) // 12月31日
+      break
+    default:
+      // 默认返回空数组
+      return []
   }
-
-  // 过滤出指定季度的合同
-  const filteredContracts = contracts.filter((contract) => {
+  
+  console.log(`获取${quarter}季度合同 (${startDate.toISOString()} - ${endDate.toISOString()})`)
+  
+  // 筛选指定季度的合同
+  const quarterContracts = contracts.filter(contract => {
     const contractDate = new Date(contract.date)
-    const month = contractDate.getMonth()
-    return quarterMap[quarter].includes(month)
+    return contractDate >= startDate && contractDate <= endDate
   })
-
-  return filteredContracts
+  
+  return quarterContracts
 }
 
 export async function initSampleData() {
@@ -773,6 +1012,12 @@ export async function initSampleData() {
   
   // 这里可以添加示例数据初始化代码
   console.log("初始化示例数据");
+}
+
+// 获取客户数量
+export async function getCustomersCount() {
+  const db = await initDB()
+  return db.count("customers")
 }
 
 // 获取线索数量统计

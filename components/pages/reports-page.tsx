@@ -37,6 +37,7 @@ import {
   getPhoneCallsCount,
   resetDatabase,
   fixPlansData,
+  getCustomersCount,
 } from "@/lib/db-service"
 import { PerformanceWeightsDialog } from "./performance-weights-dialog"
 import { Button } from "@/components/ui/button"
@@ -122,7 +123,7 @@ export function ReportsPage() {
       setLoading(true)
 
       // 获取当前周期的数据
-      let periodData
+      let periodData: PeriodData[] = [];
       switch (period) {
         case "weekly":
           periodData = await getWeeklyStats()
@@ -140,6 +141,12 @@ export function ReportsPage() {
           periodData = await getWeeklyStats()
       }
 
+      // 确保数据不为空
+      if (!periodData || periodData.length === 0) {
+        console.warn(`${period}周期没有数据，使用默认空数组`);
+        periodData = [];
+      }
+
       // 获取汇总数据
       const summary = await getReportSummary(period)
 
@@ -153,10 +160,17 @@ export function ReportsPage() {
       const visitsCount = await getVisitsCount()
       const phoneCallsCount = await getPhoneCallsCount()
       const contractsAmount = await getContractsAmount()
+      const customersCount = await getCustomersCount() // 获取正式客户数量
 
       console.log('刷新数据:', {
+        period,
+        leadsCount,
+        prospectsCount,
+        targetsCount,
+        visitsCount,
         phoneCallsCount,
-        visitsCount
+        contractsAmount,
+        customersCount
       })
 
       // 更新状态
@@ -172,12 +186,18 @@ export function ReportsPage() {
         contractsAmount,
       })
 
-      // 计算转化率 - 新公式：合同客户数量/(潜在客户数量+线索商机数量)
-      const contractsCount = await getContractsAmount(); // 获取合同数量，代表已转化的客户
-      const totalLeadsAndProspects = summary.newLeads + summary.newProspects;
+      // 使用获取到的数据重新计算转化率
+      const totalLeadsAndProspects = leadsCount + prospectsCount;
       
       if (totalLeadsAndProspects > 0) {
-        summary.conversionRate = Math.round((contractsCount / totalLeadsAndProspects) * 100);
+        const newConversionRate = Math.round((customersCount / totalLeadsAndProspects) * 100);
+        // 确保summary对象存在
+        if (summary) {
+          summary.conversionRate = newConversionRate;
+          // 更新状态
+          setSummaryData({...summary});
+        }
+        console.log(`转化率计算: 正式客户数(${customersCount}) / (线索数(${leadsCount}) + 潜在客户数(${prospectsCount})) = ${newConversionRate}%`);
       }
     } catch (err: any) {
       console.error("Error fetching report data:", err)
@@ -269,13 +289,56 @@ export function ReportsPage() {
     return { score, grade }
   }
 
-  // 计算柱状图显示量
+  // 计算柱状图显示量，修改为包含空数据处理
   const getDataForBarChart = () => {
+    // 如果没有数据，返回一个默认数组
+    if (!currentData || currentData.length === 0) {
+      console.warn("没有数据用于柱状图，返回默认数组");
+      
+      // 根据不同周期创建默认数据
+      switch (period) {
+        case "weekly":
+          return [
+            { name: "周一", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "周二", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "周三", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "周四", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "周五", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+          ];
+        case "monthly":
+          return [
+            { name: "第1周", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "第2周", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "第3周", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "第4周", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+          ];
+        case "quarterly":
+          return [
+            { name: "1月", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "2月", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "3月", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+          ];
+        case "yearly":
+          return [
+            { name: "Q1", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "Q2", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "Q3", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+            { name: "Q4", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+          ];
+        default:
+          return [
+            { name: "无数据", 新增线索: 0, 新增潜在客户: 0, 电话联系: 0, 拜访数量: 0 },
+          ];
+      }
+    }
+    
     // 限制最多显示6条数据
     const limitedData = [...currentData];
     if (limitedData.length > 6) {
       limitedData.splice(0, limitedData.length - 6);
     }
+    
+    console.log("柱状图数据:", limitedData);
     return limitedData;
   }
 
@@ -492,7 +555,7 @@ export function ReportsPage() {
             </CardHeader>
             <CardContent className="p-2">
               <div className="text-xl font-bold">{summaryData.conversionRate}%</div>
-              <p className="text-xs text-muted-foreground mt-0.5">客户数量/(线索+潜在客户数量)</p>
+              <p className="text-xs text-muted-foreground mt-0.5">正式客户数量/(线索+潜在客户数量)</p>
               <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-brand-teal rounded-full"
