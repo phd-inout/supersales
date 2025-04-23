@@ -1,10 +1,15 @@
 This is a simple CRM system developed by PHD for large customer sales. The database is created in the browser without the need for a backend. The database is local, but the browser cannot clear it.
+
 Project technical framework: react+next.js
+
 Database: Browser built-in database idb
+
 Pages include: business leads, potential customers, customers, KPI goals, weekly plans, data overview, support page screenshots and export to PDF
+
 Trial website: supersales.onrender.com
 
 Development direction: AI reconstructs CRM for key customers, and develops in the directions of customer identification, search, customer grading and evaluation, and AI-generated sales strategies!
+
 I hope everyone will participate in the update!
 
 
